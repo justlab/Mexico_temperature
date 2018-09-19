@@ -35,18 +35,18 @@ Temp[, day:= as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y")) ]
 
 # Load LST data (based on michael dorman R script).
-aqua.2015 <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD11A1_2015.rds")
-a.2015 <- subset(aqua.2015, lstid %in% fullgrid$lstid)
-a.2015 <- as.data.table(a.2015)
+aqua.2011 <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD11A1_2011.rds")
+a.2011 <- subset(aqua.2011, lstid %in% fullgrid$lstid)
+a.2011 <- as.data.table(a.2011)
 # Create full LU TS
-days <- seq.Date(from = as.Date("2015-01-01"), to = as.Date("2015-12-31"), 1)
+days <- seq.Date(from = as.Date("2011-01-01"), to = as.Date("2011-12-31"), 1)
 # Create date range
-days2015 <- data.table(expand.grid(lstid = fullgrid[, unique(lstid)], day = days))
-# days2015$lstid <- as.character(days2015$lstid)
+days2011 <- data.table(expand.grid(lstid = fullgrid[, unique(lstid)], day = days))
+# days2011$lstid <- as.character(days2011$lstid)
 # Merge 
-setkey(a.2015, lstid, day)
-setkey(days2015,lstid, day)
-db2015 <- merge(days2015, a.2015, all.x = T)
+setkey(a.2011, lstid, day)
+setkey(days2011,lstid, day)
+db2011 <- merge(days2011, a.2011, all.x = T)
 
 # Subset grid. Select desired variables/columns.
 fullgrid <- select(fullgrid, lstid, elevation, aspectmean, roaddenmean, openplace, ndviid, in_water)
@@ -54,11 +54,11 @@ fullgrid <- select(fullgrid, lstid, elevation, aspectmean, roaddenmean, openplac
 ####### Spatial 
 # Bring in all spatial components
 # Merge
-setkey(db2015, lstid)
+setkey(db2011, lstid)
 setkey(fullgrid, lstid)
-db2015 <- merge(db2015, fullgrid, all.x = T)  
+db2011 <- merge(db2011, fullgrid, all.x = T)  
 gc()
-head(db2015)
+head(db2011)
 
 # Ignore this section since % open place is in dataset.
 ##### import the open places percent , csv in to the database!!!!!
@@ -74,29 +74,29 @@ head(db2015)
 
 
 # Add month.
-db2015[, m := as.numeric(format(day, "%m"))]
+db2011[, m := as.numeric(format(day, "%m"))]
 # Add season.
 # 1-winter, 2-spring, 3-summer, 4-autumn
-db2015$season <- recode(db2015$m,'1'="1",'2'="1",'3'="2",'4'="2",'5'="2",'6'="3",'7'="3",'8'="3",'9'="4",'10'="4",'11'="4",'12'="1" )
+db2011$season <- recode(db2011$m,'1'="1",'2'="1",'3'="2",'4'="2",'5'="2",'6'="3",'7'="3",'8'="3",'9'="4",'10'="4",'11'="4",'12'="1" )
 # 1-winter, 2-summer
-db2015$seasonSW <- recode(db2015$m,'1'="1",'2'="1",'3'="1",'4'="2",'5'="2",'6'="2",'7'="2",'8'="2",'9'="2",'10'="1",'11'="1",'12'="1")
+db2011$seasonSW <- recode(db2011$m,'1'="1",'2'="1",'3'="1",'4'="2",'5'="2",'6'="2",'7'="2",'8'="2",'9'="2",'10'="1",'11'="1",'12'="1")
 
 
 # Join NDVI to LST.
-fin.ndvi <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD13A3_2015.rds")
+fin.ndvi <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD13A3_2011.rds")
 fin.ndvi <- as.data.table(fin.ndvi)
 fin.ndvi[, m := as.numeric(format(day, "%m"))]
-# fin.ndvi <- filter(fin.ndvi, c==2015)
+# fin.ndvi <- filter(fin.ndvi, c==2011)
 names(fin.ndvi)[1] <- paste("ndviid")
 f.ndvi<-subset(fin.ndvi, ndviid %in% fullgrid$ndviid)
 
 # Add NDVI.
-setkey(db2015, ndviid, m)
+setkey(db2011, ndviid, m)
 setkey(f.ndvi, ndviid, m)
-db2015 <- merge(db2015, f.ndvi[,list(ndviid,ndvi,m)], all.x = T)
-db2015 <- db2015[complete.cases(db2015$lat_lst),]
+db2011 <- merge(db2011, f.ndvi[,list(ndviid,ndvi,m)], all.x = T)
+db2011 <- db2011[complete.cases(db2011$lat_lst),]
 gc()
-summary(db2015)
+summary(db2011)
 
 
 ##### change the date time string  to just  4 digits string)
@@ -108,98 +108,98 @@ summary(db2015)
 
 
 # Relative humidity mean
-Temp2015 <- filter(Temp, c==2015)
-temp2015tc <- select(Temp2015, stn, r.humidity.mean, lat_stn=Y, long_stn=X, day)
-temp2015tc <- na.omit(temp2015tc)
-temp2015tc <- as.data.table(temp2015tc)
-temp2015tc$stn <- as.character(temp2015tc$stn)
+Temp2011 <- filter(Temp, c==2011)
+temp2011tc <- select(Temp2011, stn, r.humidity.mean, lat_stn=Y, long_stn=X, day)
+temp2011tc <- na.omit(temp2011tc)
+temp2011tc <- as.data.table(temp2011tc)
+temp2011tc$stn <- as.character(temp2011tc$stn)
 
 # Spatiotemporal join. 
 # Create point matrices for temperature. 
-met.m <- makepointsmatrix(temp2015tc, "long_stn", "lat_stn", "stn")
-setkey(db2015, lstid)
-lu.m <- makepointsmatrix(db2015[db2015[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+met.m <- makepointsmatrix(temp2011tc, "long_stn", "lat_stn", "stn")
+setkey(db2011, lstid)
+lu.m <- makepointsmatrix(db2011[db2011[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 # Use nearestbyday function to find nearest met station by day with relative humidity mean data.
 closestaodse <- nearestbyday(lu.m, met.m, 
-                            db2015, temp2015tc[, list(day,r.humidity.mean,stn)], 
+                            db2011, temp2011tc[, list(day,r.humidity.mean,stn)], 
                             "lstid", "stn", "meanT", "r.humidity.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2015, lstid, day)
+setkey(db2011, lstid, day)
 setkey(closestaodse, lstid, day)
-db2015 <- merge(db2015, closestaodse[,list(day, r.humidity.mean, lstid)], all.x = T)
+db2011 <- merge(db2011, closestaodse[,list(day, r.humidity.mean, lstid)], all.x = T)
 
 # Wind speed mean
-Temp2015 <- filter(Temp,c==2015)
-temp2015tc <- select(Temp2015,stn,wind.speed.mean,lat_stn= Y ,long_stn= X,day)
-temp2015tc <- na.omit(temp2015tc)
-temp2015tc <- as.data.table(temp2015tc)
-temp2015tc$stn <- as.character(temp2015tc$stn)
+Temp2011 <- filter(Temp,c==2011)
+temp2011tc <- select(Temp2011,stn,wind.speed.mean,lat_stn= Y ,long_stn= X,day)
+temp2011tc <- na.omit(temp2011tc)
+temp2011tc <- as.data.table(temp2011tc)
+temp2011tc$stn <- as.character(temp2011tc$stn)
 
 # Spatiotemporal join.
 # Matrices for temperature.
-met.m <- makepointsmatrix(temp2015tc, "long_stn", "lat_stn", "stn")
-setkey(db2015, lstid)
-lu.m <- makepointsmatrix(db2015[db2015[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+met.m <- makepointsmatrix(temp2011tc, "long_stn", "lat_stn", "stn")
+setkey(db2011, lstid)
+lu.m <- makepointsmatrix(db2011[db2011[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 # Use nearestbyday function to find nearest met station by day with wind speed data.
 closestaodse <- nearestbyday(lu.m ,met.m , 
-                            db2015, temp2015tc[, list(day, wind.speed.mean, stn)], 
+                            db2011, temp2011tc[, list(day, wind.speed.mean, stn)], 
                             "lstid", "stn", "meanT", "wind.speed.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2015, lstid, day)
+setkey(db2011, lstid, day)
 setkey(closestaodse, lstid, day)
-db2015 <- merge(db2015, closestaodse[,list(day, wind.speed.mean, lstid)], all.x = T)
+db2011 <- merge(db2011, closestaodse[,list(day, wind.speed.mean, lstid)], all.x = T)
 
 # Bar (barometric pressure?) mean
-Temp2015 <- filter(Temp, c==2015)
-temp2015tc <- select(Temp2015, stn, bar.mean, lat_stn=Y, long_stn=X, day)
-temp2015tc <- na.omit(temp2015tc)
-temp2015tc <- as.data.table(temp2015tc)
-temp2015tc$stn <- as.character(temp2015tc$stn)
+Temp2011 <- filter(Temp, c==2011)
+temp2011tc <- select(Temp2011, stn, bar.mean, lat_stn=Y, long_stn=X, day)
+temp2011tc <- na.omit(temp2011tc)
+temp2011tc <- as.data.table(temp2011tc)
+temp2011tc$stn <- as.character(temp2011tc$stn)
 
 # Spatiotemporal join. 
 # Matrices for temperature. 
-met.m <- makepointsmatrix(temp2015tc, "long_stn", "lat_stn", "stn")
-setkey(db2015, lstid)
-lu.m <- makepointsmatrix(db2015[db2015[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+met.m <- makepointsmatrix(temp2011tc, "long_stn", "lat_stn", "stn")
+setkey(db2011, lstid)
+lu.m <- makepointsmatrix(db2011[db2011[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 # Use nearestbyday function to find nearest met station by day with wind speed data.
 closestaodse<- nearestbyday(lu.m ,met.m , 
-                            db2015, temp2015tc[, list(day,bar.mean,stn)], 
+                            db2011, temp2011tc[, list(day,bar.mean,stn)], 
                             "lstid", "stn", "meanT", "bar.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2015, lstid, day)
+setkey(db2011, lstid, day)
 setkey(closestaodse, lstid, day)
-db2015 <- merge(db2015, closestaodse[,list(day, bar.mean, lstid)], all.x = T)
+db2011 <- merge(db2011, closestaodse[,list(day, bar.mean, lstid)], all.x = T)
 
 
 # Rain mean.
-Temp2015 <- filter(Temp, c==2015)
-temp2015tc <- select(Temp2015, stn, rain.mean, lat_stn=Y, long_stn=X, day)
-temp2015tc <- na.omit(temp2015tc)
-temp2015tc <- as.data.table(temp2015tc)
-temp2015tc$stn <- as.character(temp2015tc$stn)
+Temp2011 <- filter(Temp, c==2011)
+temp2011tc <- select(Temp2011, stn, rain.mean, lat_stn=Y, long_stn=X, day)
+temp2011tc <- na.omit(temp2011tc)
+temp2011tc <- as.data.table(temp2011tc)
+temp2011tc$stn <- as.character(temp2011tc$stn)
 
 # Spatiotemporal join.
 # Matrices for temperature. 
-met.m <- makepointsmatrix(temp2015tc, "long_stn", "lat_stn", "stn")
-setkey(db2015, lstid)
-lu.m <- makepointsmatrix(db2015[db2015[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+met.m <- makepointsmatrix(temp2011tc, "long_stn", "lat_stn", "stn")
+setkey(db2011, lstid)
+lu.m <- makepointsmatrix(db2011[db2011[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 
 # Use nearestbyday function to find nearest met station by day with rain data.
 closestaodse<- nearestbyday(lu.m ,met.m , 
-                            db2015, temp2015tc[, list(day,rain.mean,stn)], 
+                            db2011, temp2011tc[, list(day,rain.mean,stn)], 
                             "lstid", "stn", "meanT", "rain.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2015, lstid, day)
+setkey(db2011, lstid, day)
 setkey(closestaodse, lstid, day)
-db2015 <- merge(db2015, closestaodse[,list(day, rain.mean, lstid)], all.x = T)
+db2011 <- merge(db2011, closestaodse[,list(day, rain.mean, lstid)], all.x = T)
 
 
 Temp <- readRDS("./data/work/all_stations_final.rds")
@@ -207,15 +207,15 @@ Temp <- filter(Temp,hi.temp != "NA")
 Temp <- as.data.table(Temp)
 Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2015tc <- as.data.frame(Temp)
-Temp2015tc <- select(Temp2015tc, stn, day,hi.temp, low.temp, temp.mean, long_stn=X, lat_stn=Y)
+Temp2011tc <- as.data.frame(Temp)
+Temp2011tc <- select(Temp2011tc, stn, day,hi.temp, low.temp, temp.mean, long_stn=X, lat_stn=Y)
 
 
 
 #loop min
-for(i in unique(db2015$day)) {
-  x<-Temp2015tc[Temp2015tc$day==i, ]
-  y= db2015[db2015$day==i, ]
+for(i in unique(db2011$day)) {
+  x<-Temp2011tc[Temp2011tc$day==i, ]
+  y= db2011[db2011$day==i, ]
   ##########
   # calculate IDW
   library(gstat)
@@ -227,15 +227,15 @@ for(i in unique(db2015$day)) {
   inter = gstat(formula = low.temp ~ 1,  data =x)
   z<-predict(object = inter, newdata = y)
   # head(z)
-  db2015$predmin[db2015$day==i] = z$var1.pred
+  db2011$predmin[db2011$day==i] = z$var1.pred
   # spplot(z, "var1.pred", at = 0:330)
 }
 
 #loop mean
-for(i in unique(db2015$day)) {
+for(i in unique(db2011$day)) {
   
-  x<-Temp2015tc[Temp2015tc$day==i, ]
-  y= db2015[db2015$day==i, ]
+  x<-Temp2011tc[Temp2011tc$day==i, ]
+  y= db2011[db2011$day==i, ]
   ##########
   # calculate IDW
   library(gstat)
@@ -247,15 +247,15 @@ for(i in unique(db2015$day)) {
   inter = gstat(formula = temp.mean ~ 1,  data =x)
   z<-predict(object = inter, newdata = y)
   # head(z)
-  db2015$predmean[db2015$day==i] = z$var1.pred
+  db2011$predmean[db2011$day==i] = z$var1.pred
   # spplot(z, "var1.pred", at = 0:330)
 }
 
 
 #loop max
-for(i in unique(db2015$day)) {
-  x<-Temp2015tc[Temp2015tc$day==i, ]
-  y= db2015[db2015$day==i, ]
+for(i in unique(db2011$day)) {
+  x<-Temp2011tc[Temp2011tc$day==i, ]
+  y= db2011[db2011$day==i, ]
   ##########
   # calculate IDW
   library(gstat)
@@ -267,7 +267,7 @@ for(i in unique(db2015$day)) {
   inter = gstat(formula = hi.temp ~ 1,  data =x)
   z<-predict(object = inter, newdata = y)
   # head(z)
-  db2015$predmax[db2015$day==i] = z$var1.pred
+  db2011$predmax[db2011$day==i] = z$var1.pred
   # spplot(z, "var1.pred", at = 0:330)
 }
 
@@ -363,22 +363,22 @@ for(i in unique(db2015$day)) {
 #save
 gc()
 ######## MAKE SURE YOU TOOK OUT STN 
-saveRDS(db2015,"./data/outputs/AQUA/2015/c02/MEXICO.mod3.AQ.2015.rds")
+saveRDS(db2011,"./data/outputs/AQUA/2011/c02/MEXICO.mod3.AQ.2011.rds")
 gc()
 
 
 # take out missing night LST >>> mod3 night
 # take out missing day LST >>> mod3 night
 #create mod 2 file
-db2015.m2.day <- db2015[!is.na(d.tempc)]
-db2015.m2.night <- db2015[!is.na(n.tempc)]
+db2011.m2.day <- db2011[!is.na(d.tempc)]
+db2011.m2.night <- db2011[!is.na(n.tempc)]
 #rm m3
-rm(db2015)
+rm(db2011)
 gc()
 #save mod2
 
-saveRDS(db2015.m2.day,"./data/outputs/AQUA/2015/c02/MEXICO.mod2.AQ.2015.day.rds")
-saveRDS(db2015.m2.night,"./data/outputs/AQUA/2015/c02/MEXICO.mod2.AQ.2015.night.rds")
+saveRDS(db2011.m2.day,"./data/outputs/AQUA/2011/c02/MEXICO.mod2.AQ.2011.day.rds")
+saveRDS(db2011.m2.night,"./data/outputs/AQUA/2011/c02/MEXICO.mod2.AQ.2011.night.rds")
 
 gc()
 
@@ -387,15 +387,15 @@ gc()
 
 ########--------->mod1 night
 #to fix missing days issues resulting in cartesean error
-db2015days <- sort(unique(db2015.m2.night$day))
+db2011days <- sort(unique(db2011.m2.night$day))
 
 #Ta import again
 Temp <- readRDS("./data/work/all_stations_final.rds")
 # Temp <- filter(Temp,hi.temp != "NA")
 Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2015 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2015, c==2015)
+Temp2011 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
+Ta <- filter(Temp2011, c==2011)
 Ta <- as.data.table(Ta)
 Ta <- select(Ta, stn, day, low.temp, lat_stn, long_stn)
 
@@ -404,12 +404,12 @@ Ta <- select(Ta, stn, day, low.temp, lat_stn, long_stn)
 Ta$stn <- as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2015.m2.night, lstid)
-lst.m <- makepointsmatrix(db2015.m2.night[db2015.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+setkey(db2011.m2.night, lstid)
+lst.m <- makepointsmatrix(db2011.m2.night[db2011.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
 closestlst <- nearestbyday(Ta.m, lst.m, 
-                           Ta[day %in% db2015days,], db2015.m2.night, 
+                           Ta[day %in% db2011days,], db2011.m2.night, 
                            "stn", "lstid", "closest", "n.tempc", knearest = 9, maxdistance = 1500)
 
 
@@ -421,21 +421,21 @@ setkey(closestlst, stn, day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
 Ta.m1 <- Ta.m1[!is.na(n.tempc)]
 #save mod 1
-saveRDS(Ta.m1,"./data/outputs/AQUA/2015/c02/MEXICO.mod1.AQ.2015.night.rds")
+saveRDS(Ta.m1,"./data/outputs/AQUA/2011/c02/MEXICO.mod1.AQ.2011.night.rds")
 
 
 
 ########--------->mod1 day
 #to fix missing days issues resulting in cartesean error
-db2015days <- sort(unique(db2015.m2.day$day))
+db2011days <- sort(unique(db2011.m2.day$day))
 
 #Ta import again
 Temp <- readRDS("./data/work/all_stations_final.rds")
 # Temp<-filter(Temp,hi.temp != "NA")
 Temp[, day := as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2015 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c,long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2015, c==2015)
+Temp2011 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c,long_stn=X, lat_stn=Y)
+Ta <- filter(Temp2011, c==2011)
 Ta <- as.data.table(Ta)
 Ta <- select(Ta, stn, day, hi.temp, lat_stn,  long_stn)
 
@@ -446,12 +446,12 @@ Ta <- select(Ta, stn, day, hi.temp, lat_stn,  long_stn)
 Ta$stn <- as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2015.m2.day, lstid)
-lst.m <- makepointsmatrix(db2015.m2.day[db2015.m2.day[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+setkey(db2011.m2.day, lstid)
+lst.m <- makepointsmatrix(db2011.m2.day[db2011.m2.day[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
 closestlst <- nearestbyday(Ta.m, lst.m, 
-                           Ta[day %in% db2015days,], db2015.m2.day, 
+                           Ta[day %in% db2011days,], db2011.m2.day, 
                            "stn", "lstid", "closest", "d.tempc", knearest = 9, maxdistance = 1500)
 
 
@@ -463,21 +463,21 @@ setkey(closestlst, stn, day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
 Ta.m1 <- Ta.m1[!is.na(d.tempc)]
 #save mod 1
-saveRDS(Ta.m1,"./data/outputs/AQUA/2015/c02/MEXICO.mod1.AQ.2015.day.rds")
+saveRDS(Ta.m1,"./data/outputs/AQUA/2011/c02/MEXICO.mod1.AQ.2011.day.rds")
 
 
 
 ########--------->mod1 mean
 #to fix missing days issues resulting in cartesean error
-db2015days <- sort(unique(db2015.m2.night$day))
+db2011days <- sort(unique(db2011.m2.night$day))
 
 #Ta import again
 Temp <- readRDS("./data/work/all_stations_final.rds")
 # Temp<-filter(Temp,hi.temp != "NA")
 Temp[, day := as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2015 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2015, c==2015)
+Temp2011 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
+Ta <- filter(Temp2011, c==2011)
 Ta <- as.data.table(Ta)
 Ta <- select(Ta, stn, day, temp.mean, lat_stn,  long_stn)
 
@@ -486,12 +486,12 @@ Ta <- select(Ta, stn, day, temp.mean, lat_stn,  long_stn)
 Ta$stn <- as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2015.m2.night, lstid)
-lst.m <- makepointsmatrix(db2015.m2.night[db2015.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
+setkey(db2011.m2.night, lstid)
+lst.m <- makepointsmatrix(db2011.m2.night[db2011.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
 closestlst <- nearestbyday(Ta.m, lst.m, 
-                           Ta[day %in% db2015days,], db2015.m2.night, 
+                           Ta[day %in% db2011days,], db2011.m2.night, 
                            "stn", "lstid", "closest", "n.tempc", knearest = 9, maxdistance = 1500)
 
 
@@ -503,7 +503,7 @@ setkey(closestlst, stn, day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
 Ta.m1 <- Ta.m1[!is.na(n.tempc)]
 #save mod 1
-saveRDS(Ta.m1,"./data/outputs/AQUA/2015/c02/MEXICO.mod1.AQ.2015.mean24.rds")
+saveRDS(Ta.m1,"./data/outputs/AQUA/2011/c02/MEXICO.mod1.AQ.2011.mean24.rds")
 # ########--------->mod1 mean
 # #to fix missing days issues resulting in cartesean error
 # db2012days <- sort(unique(db2012.m2.day$day))

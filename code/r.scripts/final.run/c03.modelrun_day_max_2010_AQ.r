@@ -1,4 +1,4 @@
-#add all packages
+# Add all packages.
 library(lme4)
 library(reshape)
 library(foreign) 
@@ -20,8 +20,8 @@ library(DataCombine)
 source("./code/r.scripts/CV_splits.r")
 source("./code/r.scripts/rmspe.r")
 
-###year 2002
-#-------------------->> RES TABLE
+### Year 2010
+#-------------------->> RES (Results?) TABLE
 res <- matrix(nrow=1, ncol=48)
 res <- data.frame(res)
 colnames(res) <- c(
@@ -33,63 +33,61 @@ colnames(res) <- c(
   ,"m3.t31","m3.t33" #mod3 tests
   ,"m3.R2","m3.rmspe","m3.R2.space","m3.R2.time","m3.rmspe.space" #mod3
   ,"m3.I","m3.Ise","m3.slope","m3.slopese")#Extra
-res$type <- c("tempmin")
+res$type <- c("tempmax")
 
-#load data
-mod1.n <-readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod1.AQ.2002.night.rds")
+# Load dataset from c02 script.
+mod1.n <- readRDS("./data/outputs/AQUA/2010/c02/MEXICO.mod1.AQ.2010.day.rds")
 summary(mod1.n)
 
 #delete water flags
-mod1.n<-filter(mod1.n,ndvi > 0)
 #kill NA water
-mod1.n<-filter(mod1.n,in_water == 0)
-mod1.n<-filter(mod1.n,bar.mean != "NA")
-mod1.n<- as.data.table(mod1.n)
-# mod1.n<-filter(mod1.n,in_pa  == 0)
-# mod1.n<-filter(mod1.n,in_water == 0)
+mod1.n <- filter(mod1.n, ndvi > 0)
+mod1.n <- filter(mod1.n, in_water == 0)
+mod1.n <- filter(mod1.n, bar.mean != "NA")
+mod1.n <- as.data.table(mod1.n)
 # mod1.n<-filter(mod1.n,!is.na(open_place_percent))
 
 #####min temperature
 
 ###base linear model night
-# l1.raw.formula <- as.formula(tempcmax ~ n.tempc+ndvi+ELEVATION+ASPECT+DENS_POP+roadden+WATER_DIST+rhmean+wsmean+open_place_percent )
+# l1.raw.formula <- as.formula(tempcmax ~ d.tempc+ndvi+ELEVATION+ASPECT+DENS_POP+roadden+WATER_DIST+rhmean+wsmean+open_place_percent )
 # out.l1<-lm(l1.raw.formula,data=mod1.n)
 # summary(out.l1)
 # mod1$pred.m1 <- predict(out.l1)
 # print(summary(lm(tempcmax~pred.m1,data=mod1))$r.squared)
 
 
-m1.formula <- as.formula(low.temp ~ n.tempc+ndvi+elevation+aspectmean+roaddenmean+r.humidity.mean+bar.mean+rain.mean+wind.speed.mean+openplace +(1+n.tempc|day))
+m1.formula <- as.formula(hi.temp ~ d.tempc + ndvi + elevation + aspectmean + roaddenmean + r.humidity.mean + bar.mean + rain.mean + wind.speed.mean + openplace + (1+d.tempc|day))
 ####
-m1_sc <- lmer(m1.formula,data=mod1.n)
+m1_sc <- lmer(m1.formula, data=mod1.n)
 summary(m1_sc)
 mod1.n$pred.m1 <- predict(m1_sc)
-res[res$type=="tempmin", 'm1.R2'] <- print(summary(lm(low.temp~pred.m1,data=mod1.n))$r.squared)
+res[res$type=="tempmax", 'm1.R2'] <- print(summary(lm(hi.temp~pred.m1,data=mod1.n))$r.squared)
 #RMSPE
-res[res$type=="tempmin", 'm1.rmspe'] <- print(rmse(residuals(m1_sc)))
+res[res$type=="tempmax", 'm1.rmspe'] <- print(rmse(residuals(m1_sc)))
 
 #spatial
 spatialall<-mod1.n %>%
   group_by(stn) %>%
-  dplyr::summarise(barpm = mean(low.temp, na.rm=TRUE), barpred = mean(pred.m1, na.rm=TRUE)) 
+  dplyr::summarise(barpm = mean(hi.temp, na.rm=TRUE), barpred = mean(pred.m1, na.rm=TRUE)) 
 m1.fit.all.s <- lm(barpm ~ barpred, data=spatialall)
-res[res$type=="tempmin", 'm1.R2.space'] <-print(summary(lm(barpm ~ barpred, data=spatialall))$r.squared)
-res[res$type=="tempmin", 'm1.rmspe.space'] <- print(rmse(residuals(m1.fit.all.s)))
+res[res$type=="tempmax", 'm1.R2.space'] <-print(summary(lm(barpm ~ barpred, data=spatialall))$r.squared)
+res[res$type=="tempmax", 'm1.rmspe.space'] <- print(rmse(residuals(m1.fit.all.s)))
 
 
 #temporal
 #temporal (take out daily PM from yearly mean)
-tempoall<-left_join(mod1.n,spatialall)
-tempoall$delpm <-tempoall$low.temp-tempoall$barpm
-tempoall$delpred <-tempoall$pred.m1-tempoall$barpred
+tempoall <- left_join(mod1.n, spatialall)
+tempoall$delpm <- tempoall$hi.temp-tempoall$barpm
+tempoall$delpred <- tempoall$pred.m1-tempoall$barpred
 mod_temporal <- lm(delpm ~ delpred, data=tempoall)
-res[res$type=="tempmin", 'm1.R2.time']<- print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
+res[res$type=="tempmax", 'm1.R2.time']<- print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
 
 
 #save
-saveRDS(mod1.n,"./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.rds")
+saveRDS(mod1.n,"./data/outputs/AQUA/2010/c03/MEXICO.mod1.2010.AQ.day.max.predm1.rds")
 #save results
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2010/c03/MEXICO.results.2010.AQ.tempmax.rds")
 
 
 
@@ -169,82 +167,83 @@ test_s10$iter<-"s10"
 #BIND 1 dataset
 mod1.n.cv<- data.table(rbind(test_s1,test_s2,test_s3,test_s4,test_s5,test_s6,test_s7,test_s8,test_s9, test_s10))
 #save
-#saveRDS(mod1.n.cv,"./data/outputs/AQUA/2002/c03/mod1.n.AQ.2002.tempmin.CV.rds")
+#saveRDS(mod1.n.cv,"./data/outputs/AQUA/2010/c03/mod1.n.AQ.2010.tempmax.CV.rds")
 # cleanup (remove from WS) objects from CV
 rm(list = ls(pattern = "train_|test_"))
 #table updates
-m1.fit.all.cv<-lm(low.temp~pred.m1.cv,data=mod1.n.cv)
-res[res$type=="tempmin", 'm1cv.R2'] <- print(summary(lm(low.temp~pred.m1.cv,data=mod1.n.cv))$r.squared)
-res[res$type=="tempmin", 'm1cv.I'] <-print(summary(lm(low.temp~pred.m1.cv,data=mod1.n.cv))$coef[1,1])
-res[res$type=="tempmin", 'm1cv.Ise'] <-print(summary(lm(low.temp~pred.m1.cv,data=mod1.n.cv))$coef[1,2])
-res[res$type=="tempmin", 'm1cv.slope'] <-print(summary(lm(low.temp~pred.m1.cv,data=mod1.n.cv))$coef[2,1])
-res[res$type=="tempmin", 'm1cv.slopese'] <-print(summary(lm(low.temp~pred.m1.cv,data=mod1.n.cv))$coef[2,2])
+m1.fit.all.cv<-lm(hi.temp~pred.m1.cv,data=mod1.n.cv)
+res[res$type=="tempmax", 'm1cv.R2'] <- print(summary(lm(hi.temp~pred.m1.cv,data=mod1.n.cv))$r.squared)
+res[res$type=="tempmax", 'm1cv.I'] <-print(summary(lm(hi.temp~pred.m1.cv,data=mod1.n.cv))$coef[1,1])
+res[res$type=="tempmax", 'm1cv.Ise'] <-print(summary(lm(hi.temp~pred.m1.cv,data=mod1.n.cv))$coef[1,2])
+res[res$type=="tempmax", 'm1cv.slope'] <-print(summary(lm(hi.temp~pred.m1.cv,data=mod1.n.cv))$coef[2,1])
+res[res$type=="tempmax", 'm1cv.slopese'] <-print(summary(lm(hi.temp~pred.m1.cv,data=mod1.n.cv))$coef[2,2])
 #RMSPE
-res[res$type=="tempmin", 'm1cv.rmspe'] <- print(rmse(residuals(m1.fit.all.cv)))
+res[res$type=="tempmax", 'm1cv.rmspe'] <- print(rmse(residuals(m1.fit.all.cv)))
 
 
 #spatial
 spatialall.cv<-mod1.n.cv %>%
   group_by(stn) %>%
-  summarise(barpm = mean(low.temp, na.rm=TRUE), barpred = mean(pred.m1, na.rm=TRUE)) 
+  summarise(barpm = mean(hi.temp, na.rm=TRUE), barpred = mean(pred.m1, na.rm=TRUE)) 
 m1.fit.all.cv.s <- lm(barpm ~ barpred, data=spatialall.cv)
-res[res$type=="tempmin", 'm1cv.R2.space'] <-  print(summary(lm(barpm ~ barpred, data=spatialall.cv))$r.squared)
-res[res$type=="tempmin", 'm1cv.rmspe.space'] <- print(rmse(residuals(m1.fit.all.cv.s)))
+res[res$type=="tempmax", 'm1cv.R2.space'] <-  print(summary(lm(barpm ~ barpred, data=spatialall.cv))$r.squared)
+res[res$type=="tempmax", 'm1cv.rmspe.space'] <- print(rmse(residuals(m1.fit.all.cv.s)))
 
 #temporal
 tempoall.cv<-left_join(mod1.n.cv,spatialall.cv)
-tempoall.cv$delpm <-tempoall.cv$low.temp-tempoall.cv$barpm
+tempoall.cv$delpm <-tempoall.cv$hi.temp-tempoall.cv$barpm
 tempoall.cv$delpred <-tempoall.cv$pred.m1.cv-tempoall.cv$barpred
 mod_temporal.cv <- lm(delpm ~ delpred, data=tempoall.cv)
-res[res$type=="tempmin", 'm1cv.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall.cv))$r.squared)
+res[res$type=="tempmax", 'm1cv.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall.cv))$r.squared)
 
 
 #save
-saveRDS(mod1.n.cv,"./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.CV.rds")
+saveRDS(mod1.n.cv,"./data/outputs/AQUA/2010/c03/MEXICO.mod1.2010.AQ.day.max.predm1.CV.rds")
 #save res   
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2010/c03/MEXICO.results.2010.AQ.tempmax.rds")
+
 
 
 ### mod 2 (around 2-4 h)
 
-mod2.n <- readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod2.AQ.2002.night.rds")
+mod2.n <- readRDS("./data/outputs/AQUA/2010/c02/MEXICO.mod2.AQ.2010.day.rds")
 summary(mod2.n)
 
+
+
 #delete water flags
-mod2.n<-filter(mod2.n,ndvi > 0)
-mod2.n<-filter(mod2.n,in_water == 0)
+mod2.n <- filter(mod2.n,ndvi > 0)
+mod2.n <- filter(mod2.n,in_water == 0)
 #kill NA water
-mod2.n<-filter(mod2.n,bar.mean != "NA")
-mod2.n<- as.data.table(mod2.n)
-# mod2.n<-filter(mod2.n,in_pa  == 0)
-# mod2.n<-filter(mod2.n,in_water == 0)
+mod2.n <- filter(mod2.n,bar.mean != "NA")
+mod2.n <- as.data.table(mod2.n)
 # mod2.n<-filter(mod2.n,!is.na(open_place_percent))
 # mod2.n<-filter(mod2.n,!is.na(rhmean))
 # mod2.n<-filter(mod2.n,!is.na(wsmean))
 
-mod2.n$pred.m2<-predict(object=m1_sc,newdata=mod2.n,allow.new.levels=TRUE,re.form=NULL)
-mod2.n<-filter(mod2.n,!is.na(pred.m2))
-mod2.n<- as.data.table(mod2.n)
+mod2.n$pred.m2 <- predict(object=m1_sc, newdata=mod2.n, allow.new.levels=TRUE, re.form=NULL)
+mod2.n <- filter(mod2.n, !is.na(pred.m2))
+mod2.n <- as.data.table(mod2.n)
 gc()
 setkey(mod2.n,day, lstid)
-mod2.n<-mod2.n[!is.na(predmin)]
+mod2.n <- mod2.n[!is.na(predmax)]
 mod2.n$m <- as.numeric(format(mod2.n$day, "%m")) 
 mod2.n[, bimon := (m + 1) %/% 2]
 summary(mod2.n$pred.m2)
 gc()
-mod2.n <- select(mod2.n,day,lstid,m,predmin,long_lst,lat_lst,bimon,pred.m2,n.tempc) ########################################################
-saveRDS(mod2.n,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.night.min.predm2.rds")
-keep(mod2.n,res,rmse,splitdf, sure=TRUE) 
+mod2.n <- select(mod2.n, day, lstid, m, predmax, long_lst, lat_lst, bimon, pred.m2, d.tempc) ########################################################
+saveRDS(mod2.n,"./data/outputs/AQUA/2010/c03/MEXICO.mod2.2010.AQ.day.max.predm2.rds")
+keep(mod2.n, res, rmse, splitdf, sure=TRUE) 
 gc()
 
 
 #aggregate data
 #check spatial patterns by plotting a map in mod2
-out <-mod2.n %>%
+out <- mod2.n %>%
   group_by(lstid) %>%
-  summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE)  )
-out<-na.omit(out)
-write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.min.map.csv")
+  summarise(x=mean(long_lst, na.rm=TRUE), y=mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE))
+out <- na.omit(out)
+write.csv(out,"./data/outputs/AQUA/2010/c03/MEXICO.mod2.2010.AQ.max.map.csv")
 
 #library(ggmap)
 
@@ -268,7 +267,7 @@ write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.min.map.csv")
 # mod3x$pred.m3<- predict.bam(x,mod3x)
 # 
 # 
-# mod1 <-readRDS("/media/NAS/Uni/Projects/P045_Israel_LST/2.work/mod1.min.AQ.2004.tempmin.predm1.rds")
+# mod1 <-readRDS("/media/NAS/Uni/Projects/P045_Israel_LST/2.work/mod1.min.AQ.2004.tempmax.predm1.rds")
 # mod1$lstid<-paste(mod1$long_lst,mod1$lat_lst,sep="-")
 # mod1<-mod1[,c("lstid","night","tempcmax","pred.m1","stn"),with=FALSE]
 # #R2.m3
@@ -282,76 +281,75 @@ write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.min.map.csv")
 
 #run lme regression, this *should* include the thin plate spline yet will not run (computational limitations) thus we break it down into 2 components  
 summary(mod2.n)
-m2.smooth = lme(pred.m2 ~ predmin,random = list(lstid= ~1 + predmin),control=lmeControl(opt = "optim"), data= mod2.n )
+m2.smooth = lme(pred.m2 ~ predmax, random = list(lstid= ~1 + predmax), control=lmeControl(opt = "optim"), data = mod2.n )
 #correlate to see everything from mod2.n and the mpm works
-mod2.n$pred.t31<-predict(m2.smooth)
-mod2.n$resid<-residuals(m2.smooth)
+mod2.n$pred.t31 <- predict(m2.smooth)
+mod2.n$resid <- residuals(m2.smooth)
 #check R2 
-print(summary(lm(pred.m2~pred.t31,data=mod2.n))$r.squared)
+print(summary(lm(pred.m2~pred.t31, data=mod2.n))$r.squared)
 
 
 #split the files to the separate bi monthly data sets (using dplyr syntax)
-# Tall_bimon1 <- filter(mod2.n ,bimon == "1")
-# Tall_bimon2 <- filter(mod2.n ,bimon == "2")
-# Tall_bimon3 <- filter(mod2.n ,bimon == "3")
+Tall_bimon1 <- filter(mod2.n ,bimon == "1")
+Tall_bimon2 <- filter(mod2.n ,bimon == "2")
+Tall_bimon3 <- filter(mod2.n ,bimon == "3")
 Tall_bimon4 <- filter(mod2.n ,bimon == "4")
 Tall_bimon5 <- filter(mod2.n ,bimon == "5")
 Tall_bimon6 <- filter(mod2.n ,bimon == "6")
 
 #run the separate splines (smooth) for x and y for each bimon
-# fit2_1 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon1 )
-# fit2_2 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon2 )
-# fit2_3 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon3 )
+fit2_1 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon1 )
+fit2_2 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon2 )
+fit2_3 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon3 )
 fit2_4 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon4 )
 fit2_5 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon5 )
 fit2_6 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon6 )
 
 #get the predicted-fitted 
-# Xpred_1 <- (Tall_bimon1$pred.t31 - fit2_1$fitted)
-# Xpred_2 <- (Tall_bimon2$pred.t31 - fit2_2$fitted)
-# Xpred_3 <- (Tall_bimon3$pred.t31 - fit2_3$fitted)
+Xpred_1 <- (Tall_bimon1$pred.t31 - fit2_1$fitted)
+Xpred_2 <- (Tall_bimon2$pred.t31 - fit2_2$fitted)
+Xpred_3 <- (Tall_bimon3$pred.t31 - fit2_3$fitted)
 Xpred_4 <- (Tall_bimon4$pred.t31 - fit2_4$fitted)
 Xpred_5 <- (Tall_bimon5$pred.t31 - fit2_5$fitted)
 Xpred_6 <- (Tall_bimon6$pred.t31 - fit2_6$fitted)
 
 #remerge to 1 file
-mod2.n$pred.m2.int <- c(Xpred_4, Xpred_5, Xpred_6)
-#this is important so that its sorted as in the first gamm
-setkey(mod2.n,day, lstid)
+mod2.n$pred.m2.int <- c(Xpred_1, Xpred_2, Xpred_3, Xpred_4, Xpred_5, Xpred_6)
+#this is important so that its sorted as in the first gamm  
+setkey(mod2.n, day, lstid)
 
 #rerun the lme on the predictions including the spatial spline (smooth)
-Final_pred_all <- lme(pred.m2.int ~ predmin ,random = list(lstid= ~1 + predmin ),control=lmeControl(opt = "optim"),data= mod2.n  )
-mod2.n$pred.t33 <-predict(Final_pred_all)
+Final_pred_all <- lme(pred.m2.int ~ predmax, random = list(lstid= ~1 + predmax), control=lmeControl(opt = "optim"), data = mod2.n)
+mod2.n$pred.t33 <- predict(Final_pred_all)
 #check correlations
-res[res$type=="tempmin", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33,data=mod2.n))$r.squared) 
+res[res$type =="tempmax", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33, data=mod2.n))$r.squared) 
 
 
 
 #mod 3 (5-8 h)
-mod3 <- readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod3.AQ.2002.rds")
-summary(mod3)
+mod3 <- readRDS("./data/outputs/AQUA/2010/c02/MEXICO.mod3.AQ.2010.rds")
 #delete water flags
-mod3<-filter(mod3,ndvi > 0)
-mod3<-filter(mod3,in_water == 0)
+mod3 <- filter(mod3, ndvi > 0)
+mod3 <- filter(mod3, in_water == 0)
 
 #kill NA
-mod3<-filter(mod3,!is.na(r.humidity.mean))
-mod3<-filter(mod3,!is.na(wind.speed.mean))
-mod3<-filter(mod3,!is.na(bar.mean))
-mod3<-filter(mod3,!is.na(rain.mean))
-mod3<- as.data.table(mod3)
+mod3 <- filter(mod3, !is.na(r.humidity.mean))
+mod3 <- filter(mod3, !is.na(wind.speed.mean))
+mod3 <- filter(mod3, !is.na(bar.mean))
+mod3 <- filter(mod3, !is.na(rain.mean))
+mod3 <- as.data.table(mod3)
 
-mod3[, m := as.numeric(format(day, "%m")) ]
-mod3 <- select(mod3,day,lstid,m,predmin,long_lst,lat_lst)
+mod3[, m := as.numeric(format(day, "%m"))]
+mod3 <- select(mod3, day, lstid, m, predmax, long_lst, lat_lst)
 mod3[, bimon := (m + 1) %/% 2]
-setkey(mod3,day, lstid)
-mod3<-mod3[!is.na(predmin)]
-# summary(mod3)
+setkey(mod3, day, lstid)
+mod3 <- mod3[!is.na(predmax)]
+summary(mod3)
 #generate m.3 mix model  predictions 
-mod3$pred.m3.mix <-  predict(Final_pred_all,mod3)
+mod3$pred.m3.mix <- predict(Final_pred_all, mod3)
 
 #create unique grid
-ugrid <-mod3 %>%
+ugrid <- mod3 %>%
   group_by(lstid) %>%
   summarise(long_lst = mean(long_lst, na.rm=TRUE),  lat_lst = mean(lat_lst, na.rm=TRUE)) 
 
@@ -374,33 +372,32 @@ uniq_gid_bimon5 <- ugrid
 uniq_gid_bimon6 <- ugrid
 
 #get predictions for Bimon residuals
-# uniq_gid_bimon1$gpred <- predict.gam(fit2_1,uniq_gid_bimon1)
-# uniq_gid_bimon2$gpred <- predict.gam(fit2_2,uniq_gid_bimon2)
-# uniq_gid_bimon3$gpred <- predict.gam(fit2_3,uniq_gid_bimon3)
+uniq_gid_bimon1$gpred <- predict.gam(fit2_1,uniq_gid_bimon1)
+uniq_gid_bimon2$gpred <- predict.gam(fit2_2,uniq_gid_bimon2)
+uniq_gid_bimon3$gpred <- predict.gam(fit2_3,uniq_gid_bimon3)
 uniq_gid_bimon4$gpred <- predict.gam(fit2_4,uniq_gid_bimon4)
 uniq_gid_bimon5$gpred <- predict.gam(fit2_5,uniq_gid_bimon5)
 uniq_gid_bimon6$gpred <- predict.gam(fit2_6,uniq_gid_bimon6)
 
 #change bimon to data.table
-#uniq_gid_bimon1<- as.data.table(uniq_gid_bimon1)
-#uniq_gid_bimon2<- as.data.table(uniq_gid_bimon2)
-#uniq_gid_bimon3<- as.data.table(uniq_gid_bimon3)
+uniq_gid_bimon1<- as.data.table(uniq_gid_bimon1)
+uniq_gid_bimon2<- as.data.table(uniq_gid_bimon2)
+uniq_gid_bimon3<- as.data.table(uniq_gid_bimon3)
 uniq_gid_bimon4<- as.data.table(uniq_gid_bimon4)
 uniq_gid_bimon5<- as.data.table(uniq_gid_bimon5)
 uniq_gid_bimon6<- as.data.table(uniq_gid_bimon6)
 
-
 #merge things back togheter
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> merges
-# setkey(uniq_gid_bimon1,lstid)
-# setkey(mod3_bimon1,lstid)
-# mod3_bimon1 <- merge(mod3_bimon1, uniq_gid_bimon1[,list(lstid,gpred)], all.x = T)
-# setkey(uniq_gid_bimon2,lstid)
-# setkey(mod3_bimon2,lstid)
-# mod3_bimon2 <- merge(mod3_bimon2, uniq_gid_bimon2[,list(lstid,gpred)], all.x = T)
-# setkey(uniq_gid_bimon3,lstid)
-# setkey(mod3_bimon3,lstid)
-# mod3_bimon3 <- merge(mod3_bimon3, uniq_gid_bimon3[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon1,lstid)
+setkey(mod3_bimon1,lstid)
+mod3_bimon1 <- merge(mod3_bimon1, uniq_gid_bimon1[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon2,lstid)
+setkey(mod3_bimon2,lstid)
+mod3_bimon2 <- merge(mod3_bimon2, uniq_gid_bimon2[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon3,lstid)
+setkey(mod3_bimon3,lstid)
+mod3_bimon3 <- merge(mod3_bimon3, uniq_gid_bimon3[,list(lstid,gpred)], all.x = T)
 setkey(uniq_gid_bimon4,lstid)
 setkey(mod3_bimon4,lstid)
 mod3_bimon4 <- merge(mod3_bimon4, uniq_gid_bimon4[,list(lstid,gpred)], all.x = T)
@@ -412,59 +409,59 @@ setkey(mod3_bimon6,lstid)
 mod3_bimon6 <- merge(mod3_bimon6, uniq_gid_bimon6[,list(lstid,gpred)], all.x = T)
 
 #reattach all parts        
-mod3 <- rbind(mod3_bimon4,mod3_bimon5,mod3_bimon6)
-# create pred.m3
+mod3 <- rbind(mod3_bimon1,mod3_bimon2,mod3_bimon3,mod3_bimon4,mod3_bimon5,mod3_bimon6)
+# create pred.m3  
 mod3$pred.m3 <-mod3$pred.m3.mix+mod3$gpred
 # hist(mod3$pred.m3)
 summary(mod3$pred.m3)
-saveRDS(mod3,"./data/outputs/AQUA/2002/c03/MEXICO.mod3.2002.AQ.night.min.predm3.rds")
+saveRDS(mod3,"./data/outputs/AQUA/2010/c03/MEXICO.mod3.2010.AQ.day.max.predm3.rds")
 keep(mod3,res,rmse, sure=TRUE) 
 gc()
 
 
 
 #calculate stage 3 R2- CV ten folds approach will take 6 weeks...we don't currently do CV for stage 3.
-mod3 <-readRDS("./data/outputs/AQUA/2002/c03/MEXICO.mod3.2002.AQ.night.min.predm3.rds")
-mod1 <-readRDS("./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.rds")
+
+mod1 <-readRDS("./data/outputs/AQUA/2010/c03/MEXICO.mod1.2010.AQ.day.max.predm1.rds")
 mod1$lstid<-paste(mod1$long_lst,mod1$lat_lst,sep="-")
-mod1<-mod1[,c("lstid","day","low.temp","stn","pred.m1"),with=FALSE]
+mod1<-mod1[,c("lstid","day","hi.temp","stn","pred.m1"),with=FALSE]
 #R2.m3
 setkey(mod3,day,lstid)
 setkey(mod1,day,lstid)
 mod1 <- merge(mod1,mod3[, list(day,lstid,pred.m3)], all.x = T)
-m3.fit.all<- summary(lm(low.temp~pred.m3,data=mod1))
-res[res$type=="tempmin", 'm3.R2'] <- print(summary(lm(low.temp~pred.m3,data=mod1))$r.squared)    
-res[res$type=="tempmin", 'm3.I'] <-print(summary(lm(low.temp~pred.m3,data=mod1))$coef[1,1])
-res[res$type=="tempmin", 'm3.Ise'] <-print(summary(lm(low.temp~pred.m3,data=mod1))$coef[1,2])
-res[res$type=="tempmin", 'm3.slope'] <-print(summary(lm(low.temp~pred.m3,data=mod1))$coef[2,1])
-res[res$type=="tempmin", 'm3.slopese'] <-print(summary(lm(low.temp~pred.m3,data=mod1))$coef[2,2])
+m3.fit.all<- summary(lm(hi.temp~pred.m3,data=mod1))
+res[res$type=="tempmax", 'm3.R2'] <- print(summary(lm(hi.temp~pred.m3,data=mod1))$r.squared)    
+res[res$type=="tempmax", 'm3.I'] <-print(summary(lm(hi.temp~pred.m3,data=mod1))$coef[1,1])
+res[res$type=="tempmax", 'm3.Ise'] <-print(summary(lm(hi.temp~pred.m3,data=mod1))$coef[1,2])
+res[res$type=="tempmax", 'm3.slope'] <-print(summary(lm(hi.temp~pred.m3,data=mod1))$coef[2,1])
+res[res$type=="tempmax", 'm3.slopese'] <-print(summary(lm(hi.temp~pred.m3,data=mod1))$coef[2,2])
 #RMSPE
-res[res$type=="tempmin", 'm3.rmspe'] <- print(rmse(residuals(m3.fit.all)))
+res[res$type=="tempmax", 'm3.rmspe'] <- print(rmse(residuals(m3.fit.all)))
 
 
 #spatial
 ###to check
 spatialall<-mod1 %>%
   group_by(stn) %>%
-  summarise(barpm = mean(low.temp, na.rm=TRUE), barpred = mean(pred.m3, na.rm=TRUE)) 
+  summarise(barpm = mean(hi.temp, na.rm=TRUE), barpred = mean(pred.m3, na.rm=TRUE)) 
 m1.fit.all.spat<- lm(barpm ~ barpred, data=spatialall)
-res[res$type=="tempmin", 'm3.R2.space'] <-  print(summary(lm(barpm ~ barpred, data=spatialall))$r.squared)
-res[res$type=="tempmin", 'm3.rmspe.space'] <- print(rmse(residuals(m1.fit.all.spat)))
+res[res$type=="tempmax", 'm3.R2.space'] <-  print(summary(lm(barpm ~ barpred, data=spatialall))$r.squared)
+res[res$type=="tempmax", 'm3.rmspe.space'] <- print(rmse(residuals(m1.fit.all.spat)))
 
 #temporal
 tempoall<-left_join(mod1,spatialall)
-tempoall$delpm <-tempoall$low.temp-tempoall$barpm
+tempoall$delpm <-tempoall$hi.temp-tempoall$barpm
 tempoall$delpred <-tempoall$pred.m3-tempoall$barpred
 mod_temporal <- lm(delpm ~ delpred, data=tempoall)
-res[res$type=="tempmin", 'm3.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
-saveRDS(res, "./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+res[res$type=="tempmax", 'm3.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
+saveRDS(res, "./data/outputs/AQUA/2010/c03/MEXICO.results.2010.AQ.tempmax.rds")
 
 
 
 #create final prediction data set for use in health outcome studies
 
 #import mod2.n
-mod2.n<- readRDS( "./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.night.min.predm2.rds")
+mod2.n<- readRDS( "./data/outputs/AQUA/2010/c03/MEXICO.mod2.2010.AQ.day.max.predm2.rds")
 mod2.n<-mod2.n[,c("lstid","day","pred.m2"),with=FALSE]
 
 #----------------> store the best available
@@ -473,24 +470,23 @@ setkey(mod3best, day, lstid)
 setkey(mod2.n, day, lstid)
 mod3best <- merge(mod3best, mod2.n[,list(lstid, day, pred.m2)], all.x = T)
 setkey(mod1,day,lstid)
-mod3best <- merge(mod3best, mod1[,list(lstid,day,pred.m1,low.temp)], all.x = T,allow.cartesian = T)
+mod3best <- merge(mod3best, mod1[,list(lstid,day,pred.m1,hi.temp)], all.x = T,allow.cartesian = T)
 mod3best[,bestpred := pred.m3]
 mod3best[!is.na(pred.m2),bestpred := pred.m2]
 mod3best[!is.na(pred.m1),bestpred := pred.m1]
 summary(mod3best$bestpred)
 mod3best<-select(mod3best,day,lstid,long_lst,lat_lst,bestpred)
 #save
-saveRDS(mod3best,"./data/outputs/AQUA/2002/c03/MEXICO.2002.AQ.min.bestpred.rds")
+saveRDS(mod3best,"./data/outputs/AQUA/2010/c03/MEXICO.2010.AQ.max.bestpred.rds")
 mod3best<-filter(mod3best,!is.na(bestpred))
-
 
 #save for plotting in QGIS
 out <- mod3best %>% group_by(lstid) %>%
   summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), bestpred=mean(bestpred, na.rm=TRUE))
 out<-na.omit(out)
-write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.2002.AQ.min.bestpredmap.csv")
+write.csv(out,"./data/outputs/AQUA/2010/c03/MEXICO.2010.AQ.max.bestpredmap.csv")
 #save res
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2010/c03/MEXICO.results.2010.AQ.tempmax.rds")
 
 keep(rmse, sure=TRUE) 
 gc()

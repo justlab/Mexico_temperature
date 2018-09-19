@@ -24,7 +24,7 @@ years = substr(dates, 2, 5)
 ext = readOGR("/home/michael/Dropbox/BGU/Adar/processing_mod11A1_mod13A3", "area")
 mod_proj = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
 ext = spTransform(ext, mod_proj)
-# ext = extent(ext) + 15000 # Buffer extent
+# ext = extent(ext) + 15000 # Buffer extent?
 
 ###############################################################################################
 # STEP 1

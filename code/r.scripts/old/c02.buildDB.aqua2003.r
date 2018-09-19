@@ -1,4 +1,3 @@
-# Add all packages.
 library(lme4)
 library(reshape)
 library(foreign) 
@@ -17,50 +16,50 @@ library(DataCombine)
 library(FNN)
 library(gstat)
 
+# Set working directory.
+setwd("/media/Jdrive/PM/Just_Lab/projects/Mexico_temperature")
+
 # Functions to join datasets via space and time.
 source("./code/r.scripts/geomerge_alpha.r")
 
-# Import clipped grid of Mexico study area.
-fullgrid <- fread("./data/work/mexico_grid_ndvi_water_final.csv")
-fullgrid$lstid <- paste(fullgrid$long_lst, fullgrid$lat_lst,  sep = "-")
-# Original code below. I assume wrong columns were selected for ndviid?
-# fullgrid$ndviid<-paste(fullgrid$long_lst_1, fullgrid$lat_lst_1,  sep = "-")
-fullgrid$ndviid <- paste(fullgrid$long_ndvi, fullgrid$lat_ndvi, sep = "-")
-
-# Load meteorological station dataset.
-Temp <- readRDS("./data/work/all_stations_final.rds")
-Temp <- filter(Temp,hi.temp != "NA")
-Temp <- as.data.table(Temp)
-Temp[, day:= as.Date(strptime(date, "%Y-%m-%d"))]
+#import clipped grid
+fullgrid<-fread("./data/work/mexico_grid_ndvi_water_final.csv")
+fullgrid$lstid<-paste(fullgrid$long_lst, fullgrid$lat_lst,  sep = "-")
+fullgrid$ndviid<-paste(fullgrid$long_ndvi, fullgrid$lat_ndvi, sep = "-")
+#load met
+Temp<-readRDS("./data/work/all_stations_final.rds")
+Temp<-filter(Temp,hi.temp != "NA")
+Temp<- as.data.table(Temp)
+Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
 Temp[, c := as.numeric(format(day, "%Y")) ]
 
-# Load LST data (based on michael dorman R script).
-aqua.2003 <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD11A1_2003.rds")
-a.2003 <- subset(aqua.2003, lstid %in% fullgrid$lstid)
-a.2003 <- as.data.table(a.2003)
-# Create full LU TS
-days <- seq.Date(from = as.Date("2003-01-01"), to = as.Date("2003-12-31"), 1)
-# Create date range
-days2003 <- data.table(expand.grid(lstid = fullgrid[, unique(lstid)], day = days))
+#load LST data (BASED on michael dorman R script)
+aqua.2003<-readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD11A1_2003.rds")
+a.2003<-subset(aqua.2003, lstid %in% fullgrid$lstid)
+a.2003<-as.data.table(a.2003)
+#create full LU TS
+days<-seq.Date(from = as.Date("2003-01-01"), to = as.Date("2003-12-31"), 1)
+#create date range
+days2003 <-data.table (expand.grid(lstid = fullgrid[, unique(lstid)], day = days))
 # days2003$lstid <- as.character(days2003$lstid)
-# Merge 
-setkey(a.2003, lstid, day)
-setkey(days2003,lstid, day)
-db2003 <- merge(days2003, a.2003, all.x = T)
+#merge
+setkey(a.2003,lstid,day)
+setkey(days2003 ,lstid,day)
+db2003 <- merge(days2003,a.2003, all.x = T)
 
-# Subset grid. Select desired variables/columns.
-fullgrid <- select(fullgrid, lstid, elevation, aspectmean, roaddenmean, openplace, ndviid, in_water)
+#subset fgird, take out unwanted variables/columns
+fullgrid<-select(fullgrid,lstid ,elevation , aspectmean  , roaddenmean , openplace,ndviid,in_water )
 
-####### Spatial 
-# Bring in all spatial components
-# Merge
-setkey(db2003, lstid)
-setkey(fullgrid, lstid)
-db2003 <- merge(db2003, fullgrid, all.x = T)  
+#######spatial 
+#bring in all spatial components
+#merge
+setkey(db2003,lstid)
+setkey(fullgrid ,lstid)
+db2003 <- merge(db2003,fullgrid, all.x = T)  
 gc()
 head(db2003)
 
-# Ignore this section since % open place is in dataset.
+
 ##### import the open places percent , csv in to the database!!!!!
 ##take note this will be missing in PA areas
 # open<-fread("/media/NAS/Uni/Projects/P045_Israel_LST/2.work/open_places.csv")
@@ -73,28 +72,30 @@ head(db2003)
 #############
 
 
-# Add month.
-db2003[, m := as.numeric(format(day, "%m"))]
-# Add season.
-# 1-winter, 2-spring, 3-summer, 4-autumn
-db2003$season <- recode(db2003$m,'1'="1",'2'="1",'3'="2",'4'="2",'5'="2",'6'="3",'7'="3",'8'="3",'9'="4",'10'="4",'11'="4",'12'="1" )
-# 1-winter, 2-summer
-db2003$seasonSW <- recode(db2003$m,'1'="1",'2'="1",'3'="1",'4'="2",'5'="2",'6'="2",'7'="2",'8'="2",'9'="2",'10'="1",'11'="1",'12'="1")
+
+#add month
+db2003[, m := as.numeric(format(day, "%m")) ]
+#add season
+#1-winter, 2-spring,3-summer,4-autum
+db2003$season<-recode(db2003$m,'1'="1",'2'="1",'3'="2",'4'="2",'5'="2",'6'="3",'7'="3",'8'="3",'9'="4",'10'="4",'11'="4",'12'="1" )
+#1-winter, 2-summer
+db2003$seasonSW<-recode(db2003$m,'1'="1",'2'="1",'3'="1",'4'="2",'5'="2",'6'="2",'7'="2",'8'="2",'9'="2",'10'="1",'11'="1",'12'="1")
 
 
-# Join NDVI to LST.
-fin.ndvi <- readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD13A3_2003.rds")
-fin.ndvi <- as.data.table(fin.ndvi)
-fin.ndvi[, m := as.numeric(format(day, "%m"))]
-# fin.ndvi <- filter(fin.ndvi, c==2003)
-names(fin.ndvi)[1] <- paste("ndviid")
+#join NDVI to lst
+fin.ndvi<-readRDS("./data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2/MYD13A3_2003.rds")
+fin.ndvi<-as.data.table(fin.ndvi)
+fin.ndvi[, m := as.numeric(format(day, "%m")) ]
+# fin.ndvi<-filter(fin.ndvi,c==2003)
+names(fin.ndvi)[1]<-paste("ndviid")
 f.ndvi<-subset(fin.ndvi, ndviid %in% fullgrid$ndviid)
 
-# Add NDVI.
-setkey(db2003, ndviid, m)
-setkey(f.ndvi, ndviid, m)
+
+#add ndvi
+setkey(db2003,ndviid,m)
+setkey(f.ndvi,ndviid,m)
 db2003 <- merge(db2003, f.ndvi[,list(ndviid,ndvi,m)], all.x = T)
-db2003 <- db2003[complete.cases(db2003$lat_lst),]
+db2003<- db2003[complete.cases(db2003$lat_lst),]
 gc()
 summary(db2003)
 
@@ -106,109 +107,115 @@ summary(db2003)
 #Temp$date<- sub("-[[:digit:]]+","",Temp$date)
 #Temp$date=as.numeric(Temp$date)
 
+#rhmean
+#rhmean
+Temp2003<-filter(Temp,c==2003)
+temp2003tc<-select(Temp2003,stn,r.humidity.mean,lat_stn= Y ,long_stn= X,day)
+temp2003tc<-na.omit(temp2003tc)
+temp2003tc<-as.data.table(temp2003tc)
+temp2003tc$stn<-as.character(temp2003tc$stn)
 
-# Relative humidity mean
-Temp2003 <- filter(Temp, c==2003)
-temp2003tc <- select(Temp2003, stn, r.humidity.mean, lat_stn=Y, long_stn=X, day)
-temp2003tc <- na.omit(temp2003tc)
-temp2003tc <- as.data.table(temp2003tc)
-temp2003tc$stn <- as.character(temp2003tc$stn)
-
-# Spatiotemporal join. 
-# Create point matrices for temperature. 
+#spatio temporal join
+#matrix for temperature 
 met.m <- makepointsmatrix(temp2003tc, "long_stn", "lat_stn", "stn")
 setkey(db2003, lstid)
 lu.m <- makepointsmatrix(db2003[db2003[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
-# Use nearestbyday function to find nearest met station by day with relative humidity mean data.
-closestaodse <- nearestbyday(lu.m, met.m, 
-                             db2003, temp2003tc[, list(day,r.humidity.mean,stn)], 
-                             "lstid", "stn", "meanT", "r.humidity.mean", knearest = 7, maxdistance = 50000)
+#runthescript #rhmean
+
+closestaodse<- nearestbyday(lu.m ,met.m , 
+                            db2003, temp2003tc[, list(day,r.humidity.mean,stn)], 
+                            "lstid", "stn", "meanT", "r.humidity.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2003, lstid, day)
-setkey(closestaodse, lstid, day)
-db2003 <- merge(db2003, closestaodse[,list(day, r.humidity.mean, lstid)], all.x = T)
+setkey(db2003,lstid,day)
+setkey(closestaodse,lstid,day)
+db2003 <- merge(db2003, closestaodse[,list(day,r.humidity.mean,lstid)], all.x = T)
 
-# Wind speed mean
-Temp2003 <- filter(Temp,c==2003)
-temp2003tc <- select(Temp2003,stn,wind.speed.mean,lat_stn= Y ,long_stn= X,day)
-temp2003tc <- na.omit(temp2003tc)
-temp2003tc <- as.data.table(temp2003tc)
-temp2003tc$stn <- as.character(temp2003tc$stn)
+#wsmean
+#wsmean
+Temp2003<-filter(Temp,c==2003)
+temp2003tc<-select(Temp2003,stn,wind.speed.mean,lat_stn= Y ,long_stn= X,day)
+temp2003tc<-na.omit(temp2003tc)
+temp2003tc<-as.data.table(temp2003tc)
+temp2003tc$stn<-as.character(temp2003tc$stn)
 
-# Spatiotemporal join.
-# Matrices for temperature.
+#spatio temporal join
+#matrix for temperature 
 met.m <- makepointsmatrix(temp2003tc, "long_stn", "lat_stn", "stn")
 setkey(db2003, lstid)
 lu.m <- makepointsmatrix(db2003[db2003[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
-# Use nearestbyday function to find nearest met station by day with wind speed data.
-closestaodse <- nearestbyday(lu.m ,met.m , 
-                             db2003, temp2003tc[, list(day, wind.speed.mean, stn)], 
-                             "lstid", "stn", "meanT", "wind.speed.mean", knearest = 7, maxdistance = 50000)
+#runthescript #wsmean
+
+closestaodse<- nearestbyday(lu.m ,met.m , 
+                            db2003, temp2003tc[, list(day,wind.speed.mean,stn)], 
+                            "lstid", "stn", "meanT", "wind.speed.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2003, lstid, day)
-setkey(closestaodse, lstid, day)
-db2003 <- merge(db2003, closestaodse[,list(day, wind.speed.mean, lstid)], all.x = T)
+setkey(db2003,lstid,day)
+setkey(closestaodse,lstid,day)
+db2003 <- merge(db2003, closestaodse[,list(day,wind.speed.mean,lstid)], all.x = T)
 
-# Bar (barometric pressure?) mean
-Temp2003 <- filter(Temp, c==2003)
-temp2003tc <- select(Temp2003, stn, bar.mean, lat_stn=Y, long_stn=X, day)
-temp2003tc <- na.omit(temp2003tc)
-temp2003tc <- as.data.table(temp2003tc)
-temp2003tc$stn <- as.character(temp2003tc$stn)
+#bar mean
+#bar mean
+Temp2003<-filter(Temp,c==2003)
+temp2003tc<-select(Temp2003,stn,bar.mean,lat_stn= Y ,long_stn= X,day)
+temp2003tc<-na.omit(temp2003tc)
+temp2003tc<-as.data.table(temp2003tc)
+temp2003tc$stn<-as.character(temp2003tc$stn)
 
-# Spatiotemporal join. 
-# Matrices for temperature. 
+#spatio temporal join
+#matrix for temperature 
 met.m <- makepointsmatrix(temp2003tc, "long_stn", "lat_stn", "stn")
 setkey(db2003, lstid)
 lu.m <- makepointsmatrix(db2003[db2003[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
-# Use nearestbyday function to find nearest met station by day with wind speed data.
+#runthescript #bar.mean
+
 closestaodse<- nearestbyday(lu.m ,met.m , 
                             db2003, temp2003tc[, list(day,bar.mean,stn)], 
                             "lstid", "stn", "meanT", "bar.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2003, lstid, day)
-setkey(closestaodse, lstid, day)
-db2003 <- merge(db2003, closestaodse[,list(day, bar.mean, lstid)], all.x = T)
+setkey(db2003,lstid,day)
+setkey(closestaodse,lstid,day)
+db2003 <- merge(db2003, closestaodse[,list(day,bar.mean,lstid)], all.x = T)
 
 
-# Rain mean.
-Temp2003 <- filter(Temp, c==2003)
-temp2003tc <- select(Temp2003, stn, rain.mean, lat_stn=Y, long_stn=X, day)
-temp2003tc <- na.omit(temp2003tc)
-temp2003tc <- as.data.table(temp2003tc)
-temp2003tc$stn <- as.character(temp2003tc$stn)
+#rain mean
+#rain mean
+Temp2003<-filter(Temp,c==2003)
+temp2003tc<-select(Temp2003,stn,rain.mean,lat_stn= Y ,long_stn= X,day)
+temp2003tc<-na.omit(temp2003tc)
+temp2003tc<-as.data.table(temp2003tc)
+temp2003tc$stn<-as.character(temp2003tc$stn)
 
-# Spatiotemporal join.
-# Matrices for temperature. 
+#spatio temporal join
+#matrix for temperature 
 met.m <- makepointsmatrix(temp2003tc, "long_stn", "lat_stn", "stn")
 setkey(db2003, lstid)
 lu.m <- makepointsmatrix(db2003[db2003[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 
-# Use nearestbyday function to find nearest met station by day with rain data.
+
 closestaodse<- nearestbyday(lu.m ,met.m , 
                             db2003, temp2003tc[, list(day,rain.mean,stn)], 
                             "lstid", "stn", "meanT", "rain.mean", knearest = 7, maxdistance = 50000)
 
 
-setkey(db2003, lstid, day)
-setkey(closestaodse, lstid, day)
-db2003 <- merge(db2003, closestaodse[,list(day, rain.mean, lstid)], all.x = T)
+setkey(db2003,lstid,day)
+setkey(closestaodse,lstid,day)
+db2003 <- merge(db2003, closestaodse[,list(day,rain.mean,lstid)], all.x = T)
 
 
-Temp <- readRDS("./data/work/all_stations_final.rds")
-Temp <- filter(Temp,hi.temp != "NA")
-Temp <- as.data.table(Temp)
+Temp<-readRDS("./data/work/all_stations_final.rds")
+Temp<-filter(Temp,hi.temp != "NA")
+Temp<-as.data.table(Temp)
 Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
-Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2003tc <- as.data.frame(Temp)
-Temp2003tc <- select(Temp2003tc, stn, day,hi.temp, low.temp, temp.mean, long_stn=X, lat_stn=Y)
+Temp[, c := as.numeric(format(day, "%Y")) ]
+Temp2003tc<-as.data.frame(Temp)
+Temp2003tc<-select(Temp2003tc,stn,day,hi.temp, low.temp, temp.mean,long_stn= X ,lat_stn= Y)
 
 
 
@@ -390,21 +397,21 @@ gc()
 db2003days <- sort(unique(db2003.m2.night$day))
 
 #Ta import again
-Temp <- readRDS("./data/work/all_stations_final.rds")
-# Temp <- filter(Temp,hi.temp != "NA")
+Temp<-readRDS("./data/work/all_stations_final.rds")
+# Temp<-filter(Temp,hi.temp != "NA")
 Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
-Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2003 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2003, c==2003)
-Ta <- as.data.table(Ta)
-Ta <- select(Ta, stn, day, low.temp, lat_stn, long_stn)
+Temp[, c := as.numeric(format(day, "%Y")) ]
+Temp2003<-select(Temp,stn,day,hi.temp, low.temp, temp.mean,c,long_stn= X ,lat_stn= Y)
+Ta<-filter(Temp2003,c==2003)
+Ta<-as.data.table(Ta)
+Ta<-select(Ta,stn,day,low.temp, lat_stn,  long_stn)
 
 ########### join lst to Ta
 #create Ta matrix
-Ta$stn <- as.character(Ta$stn)
+Ta$stn<-as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2003.m2.night, lstid)
+setkey(db2003.m2.night,lstid)
 lst.m <- makepointsmatrix(db2003.m2.night[db2003.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
@@ -416,10 +423,10 @@ closestlst <- nearestbyday(Ta.m, lst.m,
 #closestlst[,i.stn :=NULL]
 closestlst[,closestknn :=NULL]
 
-setkey(Ta, stn, day)
-setkey(closestlst, stn, day)
+setkey(Ta,stn,day)
+setkey(closestlst,stn,day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
-Ta.m1 <- Ta.m1[!is.na(n.tempc)]
+Ta.m1<-Ta.m1[!is.na(n.tempc)]
 #save mod 1
 saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.night.rds")
 
@@ -430,23 +437,23 @@ saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.night.rds")
 db2003days <- sort(unique(db2003.m2.day$day))
 
 #Ta import again
-Temp <- readRDS("./data/work/all_stations_final.rds")
+Temp<-readRDS("./data/work/all_stations_final.rds")
 # Temp<-filter(Temp,hi.temp != "NA")
-Temp[, day := as.Date(strptime(date, "%Y-%m-%d"))]
-Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2003 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c,long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2003, c==2003)
-Ta <- as.data.table(Ta)
-Ta <- select(Ta, stn, day, hi.temp, lat_stn,  long_stn)
+Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
+Temp[, c := as.numeric(format(day, "%Y")) ]
+Temp2003<-select(Temp,stn,day,hi.temp, low.temp, temp.mean,c,long_stn= X ,lat_stn= Y)
+Ta<-filter(Temp2003,c==2003)
+Ta<-as.data.table(Ta)
+Ta<-select(Ta,stn,day,hi.temp, lat_stn,  long_stn)
 
 
 
 ########### join lst to Ta
 #create Ta matrix
-Ta$stn <- as.character(Ta$stn)
+Ta$stn<-as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2003.m2.day, lstid)
+setkey(db2003.m2.day,lstid)
 lst.m <- makepointsmatrix(db2003.m2.day[db2003.m2.day[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
@@ -458,10 +465,10 @@ closestlst <- nearestbyday(Ta.m, lst.m,
 #closestlst[,i.stn :=NULL]
 closestlst[,closestknn :=NULL]
 
-setkey(Ta, stn, day)
-setkey(closestlst, stn, day)
+setkey(Ta,stn,day)
+setkey(closestlst,stn,day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
-Ta.m1 <- Ta.m1[!is.na(d.tempc)]
+Ta.m1<-Ta.m1[!is.na(d.tempc)]
 #save mod 1
 saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.day.rds")
 
@@ -472,21 +479,21 @@ saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.day.rds")
 db2003days <- sort(unique(db2003.m2.night$day))
 
 #Ta import again
-Temp <- readRDS("./data/work/all_stations_final.rds")
+Temp<-readRDS("./data/work/all_stations_final.rds")
 # Temp<-filter(Temp,hi.temp != "NA")
-Temp[, day := as.Date(strptime(date, "%Y-%m-%d"))]
-Temp[, c := as.numeric(format(day, "%Y"))]
-Temp2003 <- select(Temp, stn, day, hi.temp, low.temp, temp.mean, c, long_stn=X, lat_stn=Y)
-Ta <- filter(Temp2003, c==2003)
-Ta <- as.data.table(Ta)
-Ta <- select(Ta, stn, day, temp.mean, lat_stn,  long_stn)
+Temp[, day:=as.Date(strptime(date, "%Y-%m-%d"))]
+Temp[, c := as.numeric(format(day, "%Y")) ]
+Temp2003<-select(Temp,stn,day,hi.temp, low.temp, temp.mean,c,long_stn= X ,lat_stn= Y)
+Ta<-filter(Temp2003,c==2003)
+Ta<-as.data.table(Ta)
+Ta<-select(Ta,stn,day,temp.mean, lat_stn,  long_stn)
 
 ########### join lst to Ta
 #create Ta matrix
-Ta$stn <- as.character(Ta$stn)
+Ta$stn<-as.character(Ta$stn)
 Ta.m <- makepointsmatrix(Ta, "long_stn", "lat_stn", "stn")
 #create lst terra matrix
-setkey(db2003.m2.night, lstid)
+setkey(db2003.m2.night,lstid)
 lst.m <- makepointsmatrix(db2003.m2.night[db2003.m2.night[,unique(lstid)], list(long_lst, lat_lst, lstid), mult = "first"], "long_lst", "lat_lst", "lstid")
 
 #run function
@@ -498,10 +505,10 @@ closestlst <- nearestbyday(Ta.m, lst.m,
 #closestlst[,i.stn :=NULL]
 closestlst[,closestknn :=NULL]
 
-setkey(Ta, stn, day)
-setkey(closestlst, stn, day)
+setkey(Ta,stn,day)
+setkey(closestlst,stn,day)
 Ta.m1 <- merge(Ta, closestlst, all.x = T)
-Ta.m1 <- Ta.m1[!is.na(n.tempc)]
+Ta.m1<-Ta.m1[!is.na(n.tempc)]
 #save mod 1
 saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.mean24.rds")
 # ########--------->mod1 mean
@@ -543,7 +550,5 @@ saveRDS(Ta.m1,"./data/outputs/AQUA/2003/c02/MEXICO.mod1.AQ.2003.mean24.rds")
 
 
 #cleanup
-# Warning: you tried to keep "fgrid" which doesn't exist in workspace - nothing was removed
-# keep(fgrid, nearestbyday, nearestbydayM1, makepointsmatrix, sure=TRUE) 
-keep(fullgrid, nearestbyday, nearestbydayM1, makepointsmatrix, sure=TRUE) 
+keep(fullgrid,nearestbyday,nearestbydayM1,makepointsmatrix, sure=TRUE) 
 gc()

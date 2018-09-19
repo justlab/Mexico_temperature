@@ -1,4 +1,4 @@
-#add all packages
+# Add all packages.
 library(lme4)
 library(reshape)
 library(foreign) 
@@ -16,12 +16,12 @@ library(broom)
 library(splines)
 library(DataCombine)
 
-#sourcing
-source("/media/qnap_eea/Projects/P018.IL.Israel.LST.Ta/R.scripts/CV_splits.r")
-source("/media/qnap_eea/Projects/P018.IL.Israel.LST.Ta/R.scripts/rmspe.r")
+# Source files for cross validation (CV) splits and RMSPE.
+source("./code/r.scripts/CV_splits.r")
+source("./code/r.scripts/rmspe.r")
 
-###year 2014
-#-------------------->> RES TABLE
+### Year 2014
+#-------------------->> RES (Results?) TABLE
 res <- matrix(nrow=1, ncol=48)
 res <- data.frame(res)
 colnames(res) <- c(
@@ -35,16 +35,16 @@ colnames(res) <- c(
 ,"m3.I","m3.Ise","m3.slope","m3.slopese")#Extra
 res$type <- c("tempmax")
 
-#load data
-mod1.n <-readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.AQ.2014.day.rds")
+# Load dataset from c02 script.
+mod1.n <- readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod1.AQ.2014.day.rds")
 summary(mod1.n)
 
 #delete water flags
 #kill NA water
-mod1.n<-filter(mod1.n,ndvi > 0)
-mod1.n<-filter(mod1.n,in_water == 0)
-mod1.n<-filter(mod1.n,bar.mean != "NA")
-mod1.n<- as.data.table(mod1.n)
+mod1.n <- filter(mod1.n, ndvi > 0)
+mod1.n <- filter(mod1.n, in_water == 0)
+mod1.n <- filter(mod1.n, bar.mean != "NA")
+mod1.n <- as.data.table(mod1.n)
 # mod1.n<-filter(mod1.n,!is.na(open_place_percent))
 
 #####min temperature
@@ -57,9 +57,9 @@ mod1.n<- as.data.table(mod1.n)
 # print(summary(lm(tempcmax~pred.m1,data=mod1))$r.squared)
 
 
-m1.formula <- as.formula(hi.temp ~ d.tempc+ndvi+elevation+aspectmean+roaddenmean+r.humidity.mean+bar.mean+rain.mean+wind.speed.mean+openplace +(1+d.tempc|day))
+m1.formula <- as.formula(hi.temp ~ d.tempc + ndvi + elevation + aspectmean + roaddenmean + r.humidity.mean + bar.mean + rain.mean + wind.speed.mean + openplace + (1+d.tempc|day))
 ####
-m1_sc <- lmer(m1.formula,data=mod1.n)
+m1_sc <- lmer(m1.formula, data=mod1.n)
 summary(m1_sc)
 mod1.n$pred.m1 <- predict(m1_sc)
 res[res$type=="tempmax", 'm1.R2'] <- print(summary(lm(hi.temp~pred.m1,data=mod1.n))$r.squared)
@@ -77,17 +77,17 @@ res[res$type=="tempmax", 'm1.R2'] <- print(summary(lm(hi.temp~pred.m1,data=mod1.
 
     #temporal
 #temporal (take out daily PM from yearly mean)
-tempoall<-left_join(mod1.n,spatialall)
-    tempoall$delpm <-tempoall$hi.temp-tempoall$barpm
-    tempoall$delpred <-tempoall$pred.m1-tempoall$barpred
+tempoall <- left_join(mod1.n, spatialall)
+    tempoall$delpm <- tempoall$hi.temp-tempoall$barpm
+    tempoall$delpred <- tempoall$pred.m1-tempoall$barpred
     mod_temporal <- lm(delpm ~ delpred, data=tempoall)
     res[res$type=="tempmax", 'm1.R2.time']<- print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
     
 
 #save
-    saveRDS(mod1.n,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.day.max.predm1.rds")
+    saveRDS(mod1.n,"./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.day.max.predm1.rds")
     #save results
-    saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmax.rds")
+    saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmax.rds")
 
 
 
@@ -167,7 +167,7 @@ tempoall<-left_join(mod1.n,spatialall)
       #BIND 1 dataset
       mod1.n.cv<- data.table(rbind(test_s1,test_s2,test_s3,test_s4,test_s5,test_s6,test_s7,test_s8,test_s9, test_s10))
       #save
-      #saveRDS(mod1.n.cv,"/media/NAS/Uni/Projects/P045_Israel_LST/2.work/mod1.n.AQ.2004.tempmax.CV.rds")
+      #saveRDS(mod1.n.cv,"./data/outputs/AQUA/2014/c03/mod1.n.AQ.2014.tempmax.CV.rds")
       # cleanup (remove from WS) objects from CV
       rm(list = ls(pattern = "train_|test_"))
       #table updates
@@ -198,52 +198,52 @@ tempoall<-left_join(mod1.n,spatialall)
 
 
 #save
-    saveRDS(mod1.n.cv,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.day.max.predm1.CV.rds")
+    saveRDS(mod1.n.cv,"./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.day.max.predm1.CV.rds")
 #save res   
-saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmax.rds")
+saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmax.rds")
 
 
 
 ### mod 2 (around 2-4 h)
 
-mod2.n <- readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.AQ.2014.day.rds")
+mod2.n <- readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod2.AQ.2014.day.rds")
 summary(mod2.n)
 
 
 
 #delete water flags
-mod2.n<-filter(mod2.n,ndvi > 0)
-mod2.n<-filter(mod2.n,in_water == 0)
+mod2.n <- filter(mod2.n,ndvi > 0)
+mod2.n <- filter(mod2.n,in_water == 0)
 #kill NA water
-mod2.n<-filter(mod2.n,bar.mean != "NA")
-mod2.n<- as.data.table(mod2.n)
+mod2.n <- filter(mod2.n,bar.mean != "NA")
+mod2.n <- as.data.table(mod2.n)
 # mod2.n<-filter(mod2.n,!is.na(open_place_percent))
 # mod2.n<-filter(mod2.n,!is.na(rhmean))
 # mod2.n<-filter(mod2.n,!is.na(wsmean))
 
-mod2.n$pred.m2<-predict(object=m1_sc,newdata=mod2.n,allow.new.levels=TRUE,re.form=NULL)
-mod2.n<-filter(mod2.n,!is.na(pred.m2))
-mod2.n<- as.data.table(mod2.n)
+mod2.n$pred.m2 <- predict(object=m1_sc, newdata=mod2.n, allow.new.levels=TRUE, re.form=NULL)
+mod2.n <- filter(mod2.n, !is.na(pred.m2))
+mod2.n <- as.data.table(mod2.n)
 gc()
 setkey(mod2.n,day, lstid)
-mod2.n<-mod2.n[!is.na(predmax)]
+mod2.n <- mod2.n[!is.na(predmax)]
 mod2.n$m <- as.numeric(format(mod2.n$day, "%m")) 
 mod2.n[, bimon := (m + 1) %/% 2]
 summary(mod2.n$pred.m2)
 gc()
-mod2.n <- select(mod2.n,day,lstid,m,predmax,long_lst,lat_lst,bimon,pred.m2,d.tempc) ########################################################
-saveRDS(mod2.n,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.2014.AQ.day.max.predm2.rds")
-keep(mod2.n,res,rmse,splitdf, sure=TRUE) 
+mod2.n <- select(mod2.n, day, lstid, m, predmax, long_lst, lat_lst, bimon, pred.m2, d.tempc) ########################################################
+saveRDS(mod2.n,"./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.day.max.predm2.rds")
+keep(mod2.n, res, rmse, splitdf, sure=TRUE) 
 gc()
 
 
 #aggregate data
 #check spatial patterns by plotting a map in mod2
-out <-mod2.n %>%
+out <- mod2.n %>%
 group_by(lstid) %>%
-summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE)  )
-out<-na.omit(out)
-write.csv(out,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/results/MEXICO.mod2.2014.AQ.max.map.csv")
+summarise(x=mean(long_lst, na.rm=TRUE), y=mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE))
+out <- na.omit(out)
+write.csv(out,"./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.max.map.csv")
 
 #library(ggmap)
 
@@ -281,12 +281,12 @@ write.csv(out,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/results/MEXICO.mo
 
 #run lme regression, this *should* include the thin plate spline yet will not run (computational limitations) thus we break it down into 2 components  
 summary(mod2.n)
-m2.smooth = lme(pred.m2 ~ predmax,random = list(lstid= ~1 + predmax),control=lmeControl(opt = "optim"), data= mod2.n )
+m2.smooth = lme(pred.m2 ~ predmax, random = list(lstid= ~1 + predmax), control=lmeControl(opt = "optim"), data = mod2.n )
 #correlate to see everything from mod2.n and the mpm works
-mod2.n$pred.t31<-predict(m2.smooth)
-mod2.n$resid<-residuals(m2.smooth)
+mod2.n$pred.t31 <- predict(m2.smooth)
+mod2.n$resid <- residuals(m2.smooth)
 #check R2 
-print(summary(lm(pred.m2~pred.t31,data=mod2.n))$r.squared)
+print(summary(lm(pred.m2~pred.t31, data=mod2.n))$r.squared)
 
 
 #split the files to the separate bi monthly data sets (using dplyr syntax)
@@ -314,42 +314,42 @@ Xpred_5 <- (Tall_bimon5$pred.t31 - fit2_5$fitted)
 Xpred_6 <- (Tall_bimon6$pred.t31 - fit2_6$fitted)
 
 #remerge to 1 file
-mod2.n$pred.m2.int <- c(Xpred_1,Xpred_2,Xpred_3, Xpred_4, Xpred_5, Xpred_6)
+mod2.n$pred.m2.int <- c(Xpred_1, Xpred_2, Xpred_3, Xpred_4, Xpred_5, Xpred_6)
 #this is important so that its sorted as in the first gamm  
-setkey(mod2.n,day, lstid)
+setkey(mod2.n, day, lstid)
 
 #rerun the lme on the predictions including the spatial spline (smooth)
-Final_pred_all <- lme(pred.m2.int ~ predmax ,random = list(lstid= ~1 + predmax ),control=lmeControl(opt = "optim"),data= mod2.n  )
-mod2.n$pred.t33 <-predict(Final_pred_all)
+Final_pred_all <- lme(pred.m2.int ~ predmax, random = list(lstid= ~1 + predmax), control=lmeControl(opt = "optim"), data = mod2.n)
+mod2.n$pred.t33 <- predict(Final_pred_all)
 #check correlations
-res[res$type=="tempmax", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33,data=mod2.n))$r.squared) 
+res[res$type =="tempmax", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33, data=mod2.n))$r.squared) 
 
 
 
 #mod 3 (5-8 h)
-mod3 <- readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod3.AQ.2014.rds")
+mod3 <- readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod3.AQ.2014.rds")
 #delete water flags
-mod3<-filter(mod3,ndvi > 0)
-mod3<-filter(mod3,in_water == 0)
+mod3 <- filter(mod3, ndvi > 0)
+mod3 <- filter(mod3, in_water == 0)
 
 #kill NA
-mod3<-filter(mod3,!is.na(r.humidity.mean))
-mod3<-filter(mod3,!is.na(wind.speed.mean))
-mod3<-filter(mod3,!is.na(bar.mean))
-mod3<-filter(mod3,!is.na(rain.mean))
-mod3<- as.data.table(mod3)
+mod3 <- filter(mod3, !is.na(r.humidity.mean))
+mod3 <- filter(mod3, !is.na(wind.speed.mean))
+mod3 <- filter(mod3, !is.na(bar.mean))
+mod3 <- filter(mod3, !is.na(rain.mean))
+mod3 <- as.data.table(mod3)
 
-mod3[, m := as.numeric(format(day, "%m")) ]
-mod3 <- select(mod3,day,lstid,m,predmax,long_lst,lat_lst)
+mod3[, m := as.numeric(format(day, "%m"))]
+mod3 <- select(mod3, day, lstid, m, predmax, long_lst, lat_lst)
 mod3[, bimon := (m + 1) %/% 2]
-setkey(mod3,day, lstid)
-mod3<-mod3[!is.na(predmax)]
+setkey(mod3, day, lstid)
+mod3 <- mod3[!is.na(predmax)]
 summary(mod3)
 #generate m.3 mix model  predictions 
-mod3$pred.m3.mix <-  predict(Final_pred_all,mod3)
+mod3$pred.m3.mix <- predict(Final_pred_all, mod3)
 
 #create unique grid
-ugrid <-mod3 %>%
+ugrid <- mod3 %>%
     group_by(lstid) %>%
     summarise(long_lst = mean(long_lst, na.rm=TRUE),  lat_lst = mean(lat_lst, na.rm=TRUE)) 
 
@@ -414,7 +414,7 @@ mod3 <- rbind(mod3_bimon1,mod3_bimon2,mod3_bimon3,mod3_bimon4,mod3_bimon5,mod3_b
 mod3$pred.m3 <-mod3$pred.m3.mix+mod3$gpred
 # hist(mod3$pred.m3)
 summary(mod3$pred.m3)
-saveRDS(mod3,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod3.2014.AQ.day.max.predm3.rds")
+saveRDS(mod3,"./data/outputs/AQUA/2014/c03/MEXICO.mod3.2014.AQ.day.max.predm3.rds")
 keep(mod3,res,rmse, sure=TRUE) 
 gc()
 
@@ -422,7 +422,7 @@ gc()
 
 #calculate stage 3 R2- CV ten folds approach will take 6 weeks...we don't currently do CV for stage 3.
 
-mod1 <-readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.day.max.predm1.rds")
+mod1 <-readRDS("./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.day.max.predm1.rds")
 mod1$lstid<-paste(mod1$long_lst,mod1$lat_lst,sep="-")
 mod1<-mod1[,c("lstid","day","hi.temp","stn","pred.m1"),with=FALSE]
 #R2.m3
@@ -454,14 +454,14 @@ tempoall$delpm <-tempoall$hi.temp-tempoall$barpm
 tempoall$delpred <-tempoall$pred.m3-tempoall$barpred
 mod_temporal <- lm(delpm ~ delpred, data=tempoall)
 res[res$type=="tempmax", 'm3.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
-saveRDS(res, "/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmax.rds")
+saveRDS(res, "./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmax.rds")
 
 
 
 #create final prediction data set for use in health outcome studies
 
 #import mod2.n
-mod2.n<- readRDS( "/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.2014.AQ.day.max.predm2.rds")
+mod2.n<- readRDS( "./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.day.max.predm2.rds")
 mod2.n<-mod2.n[,c("lstid","day","pred.m2"),with=FALSE]
 
 #----------------> store the best available
@@ -477,16 +477,16 @@ mod3best[!is.na(pred.m1),bestpred := pred.m1]
 summary(mod3best$bestpred)
 mod3best<-select(mod3best,day,lstid,long_lst,lat_lst,bestpred)
 #save
-saveRDS(mod3best,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.2014.AQ.max.bestpred.rds")
+saveRDS(mod3best,"./data/outputs/AQUA/2014/c03/MEXICO.2014.AQ.max.bestpred.rds")
 mod3best<-filter(mod3best,!is.na(bestpred))
 
 #save for plotting in QGIS
 out <- mod3best %>% group_by(lstid) %>%
 summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), bestpred=mean(bestpred, na.rm=TRUE))
 out<-na.omit(out)
-write.csv(out,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.2014.AQ.max.bestpredmap.csv")
+write.csv(out,"./data/outputs/AQUA/2014/c03/MEXICO.2014.AQ.max.bestpredmap.csv")
 #save res
-saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmax.rds")
+saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmax.rds")
 
 keep(rmse, sure=TRUE) 
 gc()

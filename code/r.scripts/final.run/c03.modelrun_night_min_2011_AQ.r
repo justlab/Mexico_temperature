@@ -20,7 +20,7 @@ library(DataCombine)
 source("./code/r.scripts/CV_splits.r")
 source("./code/r.scripts/rmspe.r")
 
-###year 2002
+###year 2011
 #-------------------->> RES TABLE
 res <- matrix(nrow=1, ncol=48)
 res <- data.frame(res)
@@ -36,7 +36,7 @@ colnames(res) <- c(
 res$type <- c("tempmin")
 
 #load data
-mod1.n <-readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod1.AQ.2002.night.rds")
+mod1.n <-readRDS("./data/outputs/AQUA/2011/c02/MEXICO.mod1.AQ.2011.night.rds")
 summary(mod1.n)
 
 #delete water flags
@@ -87,9 +87,9 @@ res[res$type=="tempmin", 'm1.R2.time']<- print(summary(lm(delpm ~ delpred, data=
 
 
 #save
-saveRDS(mod1.n,"./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.rds")
+saveRDS(mod1.n,"./data/outputs/AQUA/2011/c03/MEXICO.mod1.2011.AQ.night.min.predm1.rds")
 #save results
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2011/c03/MEXICO.results.2011.AQ.tempmin.rds")
 
 
 
@@ -169,7 +169,7 @@ test_s10$iter<-"s10"
 #BIND 1 dataset
 mod1.n.cv<- data.table(rbind(test_s1,test_s2,test_s3,test_s4,test_s5,test_s6,test_s7,test_s8,test_s9, test_s10))
 #save
-#saveRDS(mod1.n.cv,"./data/outputs/AQUA/2002/c03/mod1.n.AQ.2002.tempmin.CV.rds")
+#saveRDS(mod1.n.cv,"./data/outputs/AQUA/2011/c03/mod1.n.AQ.2011.tempmin.CV.rds")
 # cleanup (remove from WS) objects from CV
 rm(list = ls(pattern = "train_|test_"))
 #table updates
@@ -200,14 +200,14 @@ res[res$type=="tempmin", 'm1cv.R2.time'] <-  print(summary(lm(delpm ~ delpred, d
 
 
 #save
-saveRDS(mod1.n.cv,"./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.CV.rds")
+saveRDS(mod1.n.cv,"./data/outputs/AQUA/2011/c03/MEXICO.mod1.2011.AQ.night.min.predm1.CV.rds")
 #save res   
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2011/c03/MEXICO.results.2011.AQ.tempmin.rds")
 
 
 ### mod 2 (around 2-4 h)
 
-mod2.n <- readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod2.AQ.2002.night.rds")
+mod2.n <- readRDS("./data/outputs/AQUA/2011/c02/MEXICO.mod2.AQ.2011.night.rds")
 summary(mod2.n)
 
 #delete water flags
@@ -233,7 +233,7 @@ mod2.n[, bimon := (m + 1) %/% 2]
 summary(mod2.n$pred.m2)
 gc()
 mod2.n <- select(mod2.n,day,lstid,m,predmin,long_lst,lat_lst,bimon,pred.m2,n.tempc) ########################################################
-saveRDS(mod2.n,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.night.min.predm2.rds")
+saveRDS(mod2.n,"./data/outputs/AQUA/2011/c03/MEXICO.mod2.2011.AQ.night.min.predm2.rds")
 keep(mod2.n,res,rmse,splitdf, sure=TRUE) 
 gc()
 
@@ -244,7 +244,7 @@ out <-mod2.n %>%
   group_by(lstid) %>%
   summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE)  )
 out<-na.omit(out)
-write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.min.map.csv")
+write.csv(out,"./data/outputs/AQUA/2011/c03/MEXICO.mod2.2011.AQ.min.map.csv")
 
 #library(ggmap)
 
@@ -291,31 +291,31 @@ print(summary(lm(pred.m2~pred.t31,data=mod2.n))$r.squared)
 
 
 #split the files to the separate bi monthly data sets (using dplyr syntax)
-# Tall_bimon1 <- filter(mod2.n ,bimon == "1")
-# Tall_bimon2 <- filter(mod2.n ,bimon == "2")
-# Tall_bimon3 <- filter(mod2.n ,bimon == "3")
+Tall_bimon1 <- filter(mod2.n ,bimon == "1")
+Tall_bimon2 <- filter(mod2.n ,bimon == "2")
+Tall_bimon3 <- filter(mod2.n ,bimon == "3")
 Tall_bimon4 <- filter(mod2.n ,bimon == "4")
 Tall_bimon5 <- filter(mod2.n ,bimon == "5")
 Tall_bimon6 <- filter(mod2.n ,bimon == "6")
 
 #run the separate splines (smooth) for x and y for each bimon
-# fit2_1 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon1 )
-# fit2_2 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon2 )
-# fit2_3 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon3 )
+fit2_1 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon1 )
+fit2_2 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon2 )
+fit2_3 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon3 )
 fit2_4 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon4 )
 fit2_5 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon5 )
 fit2_6 <- gam(resid ~ s(long_lst,lat_lst),  data= Tall_bimon6 )
 
 #get the predicted-fitted 
-# Xpred_1 <- (Tall_bimon1$pred.t31 - fit2_1$fitted)
-# Xpred_2 <- (Tall_bimon2$pred.t31 - fit2_2$fitted)
-# Xpred_3 <- (Tall_bimon3$pred.t31 - fit2_3$fitted)
+Xpred_1 <- (Tall_bimon1$pred.t31 - fit2_1$fitted)
+Xpred_2 <- (Tall_bimon2$pred.t31 - fit2_2$fitted)
+Xpred_3 <- (Tall_bimon3$pred.t31 - fit2_3$fitted)
 Xpred_4 <- (Tall_bimon4$pred.t31 - fit2_4$fitted)
 Xpred_5 <- (Tall_bimon5$pred.t31 - fit2_5$fitted)
 Xpred_6 <- (Tall_bimon6$pred.t31 - fit2_6$fitted)
 
 #remerge to 1 file
-mod2.n$pred.m2.int <- c(Xpred_4, Xpred_5, Xpred_6)
+mod2.n$pred.m2.int <- c(Xpred_1,Xpred_2,Xpred_3, Xpred_4, Xpred_5, Xpred_6)
 #this is important so that its sorted as in the first gamm
 setkey(mod2.n,day, lstid)
 
@@ -328,7 +328,7 @@ res[res$type=="tempmin", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33,data=m
 
 
 #mod 3 (5-8 h)
-mod3 <- readRDS("./data/outputs/AQUA/2002/c02/MEXICO.mod3.AQ.2002.rds")
+mod3 <- readRDS("./data/outputs/AQUA/2011/c02/MEXICO.mod3.AQ.2011.rds")
 summary(mod3)
 #delete water flags
 mod3<-filter(mod3,ndvi > 0)
@@ -374,17 +374,17 @@ uniq_gid_bimon5 <- ugrid
 uniq_gid_bimon6 <- ugrid
 
 #get predictions for Bimon residuals
-# uniq_gid_bimon1$gpred <- predict.gam(fit2_1,uniq_gid_bimon1)
-# uniq_gid_bimon2$gpred <- predict.gam(fit2_2,uniq_gid_bimon2)
-# uniq_gid_bimon3$gpred <- predict.gam(fit2_3,uniq_gid_bimon3)
+uniq_gid_bimon1$gpred <- predict.gam(fit2_1,uniq_gid_bimon1)
+uniq_gid_bimon2$gpred <- predict.gam(fit2_2,uniq_gid_bimon2)
+uniq_gid_bimon3$gpred <- predict.gam(fit2_3,uniq_gid_bimon3)
 uniq_gid_bimon4$gpred <- predict.gam(fit2_4,uniq_gid_bimon4)
 uniq_gid_bimon5$gpred <- predict.gam(fit2_5,uniq_gid_bimon5)
 uniq_gid_bimon6$gpred <- predict.gam(fit2_6,uniq_gid_bimon6)
 
 #change bimon to data.table
-#uniq_gid_bimon1<- as.data.table(uniq_gid_bimon1)
-#uniq_gid_bimon2<- as.data.table(uniq_gid_bimon2)
-#uniq_gid_bimon3<- as.data.table(uniq_gid_bimon3)
+uniq_gid_bimon1<- as.data.table(uniq_gid_bimon1)
+uniq_gid_bimon2<- as.data.table(uniq_gid_bimon2)
+uniq_gid_bimon3<- as.data.table(uniq_gid_bimon3)
 uniq_gid_bimon4<- as.data.table(uniq_gid_bimon4)
 uniq_gid_bimon5<- as.data.table(uniq_gid_bimon5)
 uniq_gid_bimon6<- as.data.table(uniq_gid_bimon6)
@@ -392,15 +392,15 @@ uniq_gid_bimon6<- as.data.table(uniq_gid_bimon6)
 
 #merge things back togheter
 #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> merges
-# setkey(uniq_gid_bimon1,lstid)
-# setkey(mod3_bimon1,lstid)
-# mod3_bimon1 <- merge(mod3_bimon1, uniq_gid_bimon1[,list(lstid,gpred)], all.x = T)
-# setkey(uniq_gid_bimon2,lstid)
-# setkey(mod3_bimon2,lstid)
-# mod3_bimon2 <- merge(mod3_bimon2, uniq_gid_bimon2[,list(lstid,gpred)], all.x = T)
-# setkey(uniq_gid_bimon3,lstid)
-# setkey(mod3_bimon3,lstid)
-# mod3_bimon3 <- merge(mod3_bimon3, uniq_gid_bimon3[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon1,lstid)
+setkey(mod3_bimon1,lstid)
+mod3_bimon1 <- merge(mod3_bimon1, uniq_gid_bimon1[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon2,lstid)
+setkey(mod3_bimon2,lstid)
+mod3_bimon2 <- merge(mod3_bimon2, uniq_gid_bimon2[,list(lstid,gpred)], all.x = T)
+setkey(uniq_gid_bimon3,lstid)
+setkey(mod3_bimon3,lstid)
+mod3_bimon3 <- merge(mod3_bimon3, uniq_gid_bimon3[,list(lstid,gpred)], all.x = T)
 setkey(uniq_gid_bimon4,lstid)
 setkey(mod3_bimon4,lstid)
 mod3_bimon4 <- merge(mod3_bimon4, uniq_gid_bimon4[,list(lstid,gpred)], all.x = T)
@@ -412,20 +412,20 @@ setkey(mod3_bimon6,lstid)
 mod3_bimon6 <- merge(mod3_bimon6, uniq_gid_bimon6[,list(lstid,gpred)], all.x = T)
 
 #reattach all parts        
-mod3 <- rbind(mod3_bimon4,mod3_bimon5,mod3_bimon6)
+mod3 <- rbind(mod3_bimon1,mod3_bimon2,mod3_bimon3,mod3_bimon4,mod3_bimon5,mod3_bimon6)
 # create pred.m3
 mod3$pred.m3 <-mod3$pred.m3.mix+mod3$gpred
 # hist(mod3$pred.m3)
 summary(mod3$pred.m3)
-saveRDS(mod3,"./data/outputs/AQUA/2002/c03/MEXICO.mod3.2002.AQ.night.min.predm3.rds")
+saveRDS(mod3,"./data/outputs/AQUA/2011/c03/MEXICO.mod3.2011.AQ.night.min.predm3.rds")
 keep(mod3,res,rmse, sure=TRUE) 
 gc()
 
 
 
 #calculate stage 3 R2- CV ten folds approach will take 6 weeks...we don't currently do CV for stage 3.
-mod3 <-readRDS("./data/outputs/AQUA/2002/c03/MEXICO.mod3.2002.AQ.night.min.predm3.rds")
-mod1 <-readRDS("./data/outputs/AQUA/2002/c03/MEXICO.mod1.2002.AQ.night.min.predm1.rds")
+mod3 <-readRDS("./data/outputs/AQUA/2011/c03/MEXICO.mod3.2011.AQ.night.min.predm3.rds")
+mod1 <-readRDS("./data/outputs/AQUA/2011/c03/MEXICO.mod1.2011.AQ.night.min.predm1.rds")
 mod1$lstid<-paste(mod1$long_lst,mod1$lat_lst,sep="-")
 mod1<-mod1[,c("lstid","day","low.temp","stn","pred.m1"),with=FALSE]
 #R2.m3
@@ -457,14 +457,14 @@ tempoall$delpm <-tempoall$low.temp-tempoall$barpm
 tempoall$delpred <-tempoall$pred.m3-tempoall$barpred
 mod_temporal <- lm(delpm ~ delpred, data=tempoall)
 res[res$type=="tempmin", 'm3.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
-saveRDS(res, "./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res, "./data/outputs/AQUA/2011/c03/MEXICO.results.2011.AQ.tempmin.rds")
 
 
 
 #create final prediction data set for use in health outcome studies
 
 #import mod2.n
-mod2.n<- readRDS( "./data/outputs/AQUA/2002/c03/MEXICO.mod2.2002.AQ.night.min.predm2.rds")
+mod2.n<- readRDS( "./data/outputs/AQUA/2011/c03/MEXICO.mod2.2011.AQ.night.min.predm2.rds")
 mod2.n<-mod2.n[,c("lstid","day","pred.m2"),with=FALSE]
 
 #----------------> store the best available
@@ -480,7 +480,7 @@ mod3best[!is.na(pred.m1),bestpred := pred.m1]
 summary(mod3best$bestpred)
 mod3best<-select(mod3best,day,lstid,long_lst,lat_lst,bestpred)
 #save
-saveRDS(mod3best,"./data/outputs/AQUA/2002/c03/MEXICO.2002.AQ.min.bestpred.rds")
+saveRDS(mod3best,"./data/outputs/AQUA/2011/c03/MEXICO.2011.AQ.min.bestpred.rds")
 mod3best<-filter(mod3best,!is.na(bestpred))
 
 
@@ -488,9 +488,9 @@ mod3best<-filter(mod3best,!is.na(bestpred))
 out <- mod3best %>% group_by(lstid) %>%
   summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), bestpred=mean(bestpred, na.rm=TRUE))
 out<-na.omit(out)
-write.csv(out,"./data/outputs/AQUA/2002/c03/MEXICO.2002.AQ.min.bestpredmap.csv")
+write.csv(out,"./data/outputs/AQUA/2011/c03/MEXICO.2011.AQ.min.bestpredmap.csv")
 #save res
-saveRDS(res,"./data/outputs/AQUA/2002/c03/MEXICO.results.2002.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2011/c03/MEXICO.results.2011.AQ.tempmin.rds")
 
 keep(rmse, sure=TRUE) 
 gc()

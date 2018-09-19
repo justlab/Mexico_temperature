@@ -16,9 +16,9 @@ library(broom)
 library(splines)
 library(DataCombine)
 
-#sourcing
-source("/media/qnap_eea/Projects/P018.IL.Israel.LST.Ta/R.scripts/CV_splits.r")
-source("/media/qnap_eea/Projects/P018.IL.Israel.LST.Ta/R.scripts/rmspe.r")
+# Source files for cross validation (CV) splits and RMSPE.
+source("./code/r.scripts/CV_splits.r")
+source("./code/r.scripts/rmspe.r")
 
 ###year 2014
 #-------------------->> RES TABLE
@@ -36,7 +36,7 @@ colnames(res) <- c(
 res$type <- c("tempmin")
 
 #load data
-mod1.n <-readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.AQ.2014.night.rds")
+mod1.n <-readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod1.AQ.2014.night.rds")
 summary(mod1.n)
 
 #delete water flags
@@ -87,9 +87,9 @@ res[res$type=="tempmin", 'm1.R2.time']<- print(summary(lm(delpm ~ delpred, data=
 
 
 #save
-saveRDS(mod1.n,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.night.min.predm1.rds")
+saveRDS(mod1.n,"./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.night.min.predm1.rds")
 #save results
-saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmin.rds")
 
 
 
@@ -169,7 +169,7 @@ test_s10$iter<-"s10"
 #BIND 1 dataset
 mod1.n.cv<- data.table(rbind(test_s1,test_s2,test_s3,test_s4,test_s5,test_s6,test_s7,test_s8,test_s9, test_s10))
 #save
-#saveRDS(mod1.n.cv,"/media/NAS/Uni/Projects/P045_Israel_LST/2.work/mod1.n.AQ.2004.tempmin.CV.rds")
+#saveRDS(mod1.n.cv,"./data/outputs/AQUA/2014/c03/mod1.n.AQ.2014.tempmin.CV.rds")
 # cleanup (remove from WS) objects from CV
 rm(list = ls(pattern = "train_|test_"))
 #table updates
@@ -200,14 +200,14 @@ res[res$type=="tempmin", 'm1cv.R2.time'] <-  print(summary(lm(delpm ~ delpred, d
 
 
 #save
-saveRDS(mod1.n.cv,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.night.min.predm1.CV.rds")
+saveRDS(mod1.n.cv,"./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.night.min.predm1.CV.rds")
 #save res   
-saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmin.rds")
 
 
 ### mod 2 (around 2-4 h)
 
-mod2.n <- readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.AQ.2014.night.rds")
+mod2.n <- readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod2.AQ.2014.night.rds")
 summary(mod2.n)
 
 #delete water flags
@@ -233,7 +233,7 @@ mod2.n[, bimon := (m + 1) %/% 2]
 summary(mod2.n$pred.m2)
 gc()
 mod2.n <- select(mod2.n,day,lstid,m,predmin,long_lst,lat_lst,bimon,pred.m2,n.tempc) ########################################################
-saveRDS(mod2.n,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.2014.AQ.night.min.predm2.rds")
+saveRDS(mod2.n,"./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.night.min.predm2.rds")
 keep(mod2.n,res,rmse,splitdf, sure=TRUE) 
 gc()
 
@@ -244,7 +244,7 @@ out <-mod2.n %>%
   group_by(lstid) %>%
   summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), pred.m2=mean(pred.m2, na.rm=TRUE)  )
 out<-na.omit(out)
-write.csv(out,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/results/MEXICO.mod2.2014.AQ.min.map.csv")
+write.csv(out,"./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.min.map.csv")
 
 #library(ggmap)
 
@@ -328,7 +328,7 @@ res[res$type=="tempmin", 'm3.t33'] <- print(summary(lm(pred.m2 ~ pred.t33,data=m
 
 
 #mod 3 (5-8 h)
-mod3 <- readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod3.AQ.2014.rds")
+mod3 <- readRDS("./data/outputs/AQUA/2014/c02/MEXICO.mod3.AQ.2014.rds")
 summary(mod3)
 #delete water flags
 mod3<-filter(mod3,ndvi > 0)
@@ -417,15 +417,15 @@ mod3 <- rbind(mod3_bimon1,mod3_bimon2,mod3_bimon3,mod3_bimon4,mod3_bimon5,mod3_b
 mod3$pred.m3 <-mod3$pred.m3.mix+mod3$gpred
 # hist(mod3$pred.m3)
 summary(mod3$pred.m3)
-saveRDS(mod3,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod3.2014.AQ.night.min.predm3.rds")
+saveRDS(mod3,"./data/outputs/AQUA/2014/c03/MEXICO.mod3.2014.AQ.night.min.predm3.rds")
 keep(mod3,res,rmse, sure=TRUE) 
 gc()
 
 
 
 #calculate stage 3 R2- CV ten folds approach will take 6 weeks...we don't currently do CV for stage 3.
-mod3 <-readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod3.2014.AQ.night.min.predm3.rds")
-mod1 <-readRDS("/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod1.2014.AQ.night.min.predm1.rds")
+mod3 <-readRDS("./data/outputs/AQUA/2014/c03/MEXICO.mod3.2014.AQ.night.min.predm3.rds")
+mod1 <-readRDS("./data/outputs/AQUA/2014/c03/MEXICO.mod1.2014.AQ.night.min.predm1.rds")
 mod1$lstid<-paste(mod1$long_lst,mod1$lat_lst,sep="-")
 mod1<-mod1[,c("lstid","day","low.temp","stn","pred.m1"),with=FALSE]
 #R2.m3
@@ -457,14 +457,14 @@ tempoall$delpm <-tempoall$low.temp-tempoall$barpm
 tempoall$delpred <-tempoall$pred.m3-tempoall$barpred
 mod_temporal <- lm(delpm ~ delpred, data=tempoall)
 res[res$type=="tempmin", 'm3.R2.time'] <-  print(summary(lm(delpm ~ delpred, data=tempoall))$r.squared)
-saveRDS(res, "/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmin.rds")
+saveRDS(res, "./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmin.rds")
 
 
 
 #create final prediction data set for use in health outcome studies
 
 #import mod2.n
-mod2.n<- readRDS( "/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.mod2.2014.AQ.night.min.predm2.rds")
+mod2.n<- readRDS( "./data/outputs/AQUA/2014/c03/MEXICO.mod2.2014.AQ.night.min.predm2.rds")
 mod2.n<-mod2.n[,c("lstid","day","pred.m2"),with=FALSE]
 
 #----------------> store the best available
@@ -480,7 +480,7 @@ mod3best[!is.na(pred.m1),bestpred := pred.m1]
 summary(mod3best$bestpred)
 mod3best<-select(mod3best,day,lstid,long_lst,lat_lst,bestpred)
 #save
-saveRDS(mod3best,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.2014.AQ.min.bestpred.rds")
+saveRDS(mod3best,"./data/outputs/AQUA/2014/c03/MEXICO.2014.AQ.min.bestpred.rds")
 mod3best<-filter(mod3best,!is.na(bestpred))
 
 
@@ -488,9 +488,9 @@ mod3best<-filter(mod3best,!is.na(bestpred))
 out <- mod3best %>% group_by(lstid) %>%
   summarise(x=mean(long_lst, na.rm=TRUE), y =mean(lat_lst, na.rm=TRUE), bestpred=mean(bestpred, na.rm=TRUE))
 out<-na.omit(out)
-write.csv(out,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.2014.AQ.min.bestpredmap.csv")
+write.csv(out,"./data/outputs/AQUA/2014/c03/MEXICO.2014.AQ.min.bestpredmap.csv")
 #save res
-saveRDS(res,"/media/qnap_eea/Projects/P029.MX.DF.LST.Ta/work/MEXICO.results.2014.AQ.tempmin.rds")
+saveRDS(res,"./data/outputs/AQUA/2014/c03/MEXICO.results.2014.AQ.tempmin.rds")
 
 keep(rmse, sure=TRUE) 
 gc()
