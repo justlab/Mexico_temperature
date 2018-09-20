@@ -90,24 +90,39 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
 
     # Merge in satellite data.
     d = merge(d,
-        aqua.temp(the.year)[, c("lstid", "yday", satellite.temp.var), with = F],
+        aqua.temp(the.year)[
+            lstid %in% d$lstid,
+            c("lstid", "yday", satellite.temp.var),
+            with = F],
         by = c("lstid", "yday"),
-        all.x = T)
+        all = T)
     setnames(d, satellite.temp.var, "satellite.temp")
     d = merge(d,
         aqua.ndvi(the.year),
         by = c("ndviid", "month"),
         all.x = T)
 
-    # Keep the columns we'll use in modeling (plus `stn`).
-    d = d[, .(stn,
+    # Within each grid cell, linearly interpolate missing
+    # satellite temperatures on the basis of day.
+    d[, satellite.temp.imputed := is.na(satellite.temp)]
+    d[,
+        satellite.temp := approx(
+            x = yday, y = satellite.temp, xout = yday,
+            method = "linear", rule = 2)$y,
+        by = lstid]
+
+    # We can now throw out rows with missing ground temperatures,
+    # and keep only the columns we want.
+    d = d[!is.na(ground.temp), .(
+        stn, satellite.temp.imputed,
         ground.temp, satellite.temp, ndvi,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
         openplace, yday)]
 
-    # Standardize all variables but the DV, `stn`, and `yday`.
-    for (col in setdiff(colnames(d), c("ground.temp", "stn", "yday")))
+    # Standardize most variables.
+    for (col in setdiff(colnames(d), c("lstid",
+            "ground.temp", "stn", "satellite.temp.imputed", "yday")))
         d[[col]] = arm::rescale(d[[col]])
 
     # Split the ground stations into cross-validation folds. This
@@ -117,7 +132,7 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
     # The actual number of folds will be less than `n.folds` if
     # there aren't at least `n.folds` stations.
     set.seed(the.year * 10 + (satellite.temp.var == "n.tempc"))
-    stns = d[!is.na(satellite.temp), sort(unique(stn))]
+    stns = sort(unique(d$stn))
     stn.folds = data.table(key = "stn",
         stn = stns,
         fold = sample(rep(1 : n.folds, len = length(stns))))
@@ -176,10 +191,6 @@ run.cv = function(the.year, ground.temp.var, satellite.temp.var)
                             break}
                     stopifnot(found)}}
 
-        # With that done, restrict attention to cases with non-missing
-        # satellite temperature.
-        d = d[!is.na(satellite.temp)]
-
         m = train.model(d[fold != fold.i])
         d[fold == fold.i, .(stn, yday, pred =
             predict(m, .SD, allow.new.levels = T))]})
@@ -187,7 +198,7 @@ run.cv = function(the.year, ground.temp.var, satellite.temp.var)
     for (d in results)
         d.master[.(d$stn, d$yday), pred := d$pred]
 
-    d.master[!is.na(satellite.temp)]}
+    d.master}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
 
 multirun = function(years)
