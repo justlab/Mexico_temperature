@@ -11,7 +11,7 @@ plan(multiprocess)
 aqua.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
 
 n.folds = 10
-available.years = 2002 : 2015
+available.years = 2003 : 2015
 
 nontemp.ground.vars = c(
     "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
