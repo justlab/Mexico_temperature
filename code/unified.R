@@ -27,7 +27,14 @@ fullgrid = fullgrid[,.(
     in_water)]
 
 # Load the data from ground stations.
-ground = readRDS("data/work/all_stations_final.rds")[order(stn)]
+ground = readRDS("data/work/all_stations_final.rds")
+# There are 39 cases in which we have more than one observation
+# for a particular station and day (which all happen to be in 2013
+# from station 76677). In each case, keep only the second of the
+# two observations.
+stopifnot(ground[, .N, by = .(date, stn)][N > 1, .N] == 39)
+ground = ground[, head(.SD, 1), by = .(date, stn)]
+setkey(ground, stn)
 
 # Find the nearest LST and NDVI ID for each station.
 nearest.id = function(longvar, latvar, idvar)
