@@ -1,6 +1,7 @@
 library(data.table)
 library(FNN)
 library(lme4)
+library(ape)
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
@@ -237,7 +238,12 @@ months2seasons = factor(c(
     "ColdDry")) # Dec
 
 summarize.results = function(multirun.output)
-   {d = multirun.output
+   {d = copy(multirun.output)
+    d[, season := months2seasons[
+        month(as.Date(paste0(year, "-01-01")) + yday)]]
+    idist = 1 / stn.dists
+    diag(idist) = 0
+    ustns = unique(ground$stn)
     j1 = quote(.(.N, sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
     list(
@@ -246,24 +252,31 @@ summarize.results = function(multirun.output)
                 [, eval(j1), keyby = .(year, dv)]
                 [, .(year, dv,
                     N, sd, rmse, "sd - rmse" = sd - rmse, R2)],
-            (d
+            d
                 [, .(mean.obs = mean(ground.temp), mean.pred = mean(pred)),
                     keyby = .(year, dv, stn)]
                 [, .(R2.spatial = cor(mean.obs, mean.pred)^2),
-                    keyby = .(year, dv)])
+                    keyby = .(year, dv)]
                 [, .(R2.spatial)],
-            (d
+            d
                 [, .(delta.obs = ground.temp - mean(ground.temp), delta.pred = pred - mean(pred)),
                     keyby = .(year, dv, stn)]
                 [, .(R2.temporal = cor(delta.obs, delta.pred)^2),
-                    keyby = .(year, dv)])
-                [, .(R2.temporal)]),
+                    keyby = .(year, dv)]
+                [, .(R2.temporal)],
+            d
+                [order(year, dv, yday, stn),
+                    .(p = Moran.I(
+                        pred - ground.temp,
+                        idist[ustns %in% stn, ustns %in% stn])$p.value),
+                    by = .(year, dv, yday)]
+                [, mean(p < .05), by = .(year, dv)]
+                [, .("Moran ps < .05" = V1)]),
         by.imp = d
             [, eval(j1), keyby = .(year, dv, satellite.temp.imputed)]
             [, .(year, dv, imp = satellite.temp.imputed,
                 N, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = d
-            [, eval(j1), keyby = .(year, dv, season = months2seasons[
-                month(as.Date(paste0(year, "-01-01")) + yday)])]
+            [, eval(j1), keyby = .(year, dv, season)]
             [, .(year, dv, season,
                 N, sd, rmse, "sd - rmse" = sd - rmse)])}
