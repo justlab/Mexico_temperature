@@ -84,7 +84,7 @@ aqua.ndvi = function(the.year)
 aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, mem = T, fst = T)
 
 model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
-   {# Get ground temperature.
+   {# Get variables from the ground stations.
     d = ground[
         year(date) == the.year,
         c(ground.temp.var, "stn", "date", nontemp.ground.vars),
@@ -100,6 +100,10 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
             lstid, elevation, aspectmean, roaddenmean, openplace)],
         by = "lstid",
         all.x = T)
+
+    # Remove the high correlation of barometric pressure with elevation
+    # by mean-centering barometric pressure within elevation.
+    d[, bar.mean := bar.mean - mean(bar.mean), by = elevation]
 
     # Merge in satellite data.
     d = merge(d,
