@@ -36,6 +36,11 @@ ground = readRDS("data/work/all_stations_final.rds")
 stopifnot(ground[, .N, by = .(date, stn)][N > 1, .N] == 39)
 ground = ground[, head(.SD, 1), by = .(date, stn)]
 setkey(ground, stn)
+# Each station should have only one position.
+stopifnot(all(
+    ground[, nrow(unique(.SD)), by = stn,
+       .SDcols = c("latitude", "longitude")]$V1
+    == 1))
 
 # Find the nearest LST and NDVI ID for each station.
 nearest.id = function(longvar, latvar, idvar)
