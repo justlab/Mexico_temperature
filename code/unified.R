@@ -154,6 +154,30 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
 
     d}
 
+impute.nontemp.ground.vars = function(d, fold.i)
+  # For each ground-station variable (other than the DV,
+  # temperature), substitute values that are missing or are
+  # currently in the test fold. We use the nearest station
+  # that has an eligible value on the same day (or a
+  # previous day, if we can't find one on the same day).
+   {d = copy(d)
+    for (ri in 1 : nrow(d))
+       {this = d[ri,]
+        for (vname in nontemp.ground.vars)
+            if (this$fold == fold.i || is.na(this[[vname]]))
+               {found = F
+                for (the.yday in this$yday : 1)
+                   {for (other.stn in other.stns.by.dist[[as.character(this$stn)]])
+                       {other = d[.(other.stn, the.yday),]
+                        if (other$fold != fold.i && !is.na(other[[vname]]))
+                           {d[ri, vname] = other[[vname]]
+                            found = T
+                            break}}
+                    if (found)
+                        break}
+                stopifnot(found)}}
+    d}
+
 train.model = function(dataset)
     lmer(data = dataset, ground.temp ~
         satellite.temp + ndvi +
@@ -181,29 +205,7 @@ run.cv = function(the.year, ground.temp.var, satellite.temp.var)
     message(the.year, " ", ground.temp.var, " ", satellite.temp.var)
 
     results = future_lapply(1 : n.folds, function(fold.i)
-       {d = copy(d.master)
-
-        # For each ground-station variable (other than the DV,
-        # temperature), substitute values that are missing or are
-        # currently in the test fold. We use the nearest station
-        # that has an eligible value on the same day (or a
-        # previous day, if we can't find one on the same day).
-        for (ri in 1 : nrow(d))
-           {this = d[ri,]
-            for (vname in nontemp.ground.vars)
-                if (this$fold == fold.i || is.na(this[[vname]]))
-                   {found = F
-                    for (the.yday in this$yday : 1)
-                       {for (other.stn in other.stns.by.dist[[as.character(this$stn)]])
-                           {other = d[.(other.stn, the.yday),]
-                            if (other$fold != fold.i && !is.na(other[[vname]]))
-                               {d[ri, vname] = other[[vname]]
-                                found = T
-                                break}}
-                        if (found)
-                            break}
-                    stopifnot(found)}}
-
+       {d = impute.nontemp.ground.vars(d.master, fold.i)
         m = train.model(d[fold != fold.i])
         d[fold == fold.i, .(stn, yday, pred =
             predict(m, .SD, allow.new.levels = T))]})
