@@ -101,9 +101,9 @@ model.dataset = function(the.year, ground.temp.var)
         by = "lstid",
         all.x = T)
 
-    # Remove the high correlation of barometric pressure with elevation
-    # by mean-centering barometric pressure within elevation.
+    # Remove some high correlations by mean-centering.
     d[, bar.mean := bar.mean - mean(bar.mean), by = elevation]
+    d[, roaddenmean := roaddenmean - mean(roaddenmean), by = openplace]
 
     # Merge in satellite data.
     d = merge(d,
