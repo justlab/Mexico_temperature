@@ -83,7 +83,7 @@ aqua.ndvi = function(the.year)
     d}
 aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, mem = T, fst = T)
 
-model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
+model.dataset = function(the.year, ground.temp.var)
    {# Get variables from the ground stations.
     d = ground[
         year(date) == the.year,
@@ -107,13 +107,12 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
 
     # Merge in satellite data.
     d = merge(d,
-        aqua.temp(the.year)[
-            lstid %in% d$lstid,
-            c("lstid", "yday", satellite.temp.var),
-            with = F],
+        aqua.temp(the.year)[lstid %in% d$lstid],
         by = c("lstid", "yday"),
         all = T)
-    setnames(d, satellite.temp.var, "satellite.temp")
+    setnames(d,
+        c("d.tempc", "n.tempc"),
+        c("satellite.temp.day", "satellite.temp.night"))
     d = merge(d,
         aqua.ndvi(the.year),
         by = c("ndviid", "month"),
@@ -121,34 +120,40 @@ model.dataset = function(the.year, ground.temp.var, satellite.temp.var)
 
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
-    d[, satellite.temp.imputed := is.na(satellite.temp)]
-    d[,
-        satellite.temp := approx(
-            x = yday, y = satellite.temp, xout = yday,
-            method = "linear", rule = 2)$y,
-        by = lstid]
+    for (vname in c("satellite.temp.day", "satellite.temp.night"))
+       {d[, paste0(vname, ".imputed") := is.na(get(vname))]
+        d[,
+            (vname) := approx(
+                x = yday, y = get(vname), xout = yday,
+                method = "linear", rule = 2)$y,
+            by = lstid]}
 
     # We can now throw out rows with missing ground temperatures,
     # and keep only the columns we want.
     d = d[!is.na(ground.temp), .(
-        stn, satellite.temp.imputed,
-        ground.temp, satellite.temp, ndvi,
+        stn,
+        ground.temp,
+        satellite.temp.day, satellite.temp.day.imputed,
+        satellite.temp.night, satellite.temp.night.imputed,
+        ndvi,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
         openplace, yday)]
 
     # Standardize most variables.
-    for (col in setdiff(colnames(d), c("lstid",
-            "ground.temp", "stn", "satellite.temp.imputed", "yday")))
+    for (col in setdiff(colnames(d), c(
+            "stn", "ground.temp",
+            "satellite.temp.day.imputed", "satellite.temp.night.imputed",
+            "yday")))
         d[[col]] = arm::rescale(d[[col]])
 
     # Split the ground stations into cross-validation folds. This
-    # has to be done on a per-year, per-satellite-temperature
-    # basis because not all stations are present in all cases.
+    # has to be done on a per-year basis because not all stations
+    # are present in all cases.
     #
     # The actual number of folds will be less than `n.folds` if
     # there aren't at least `n.folds` stations.
-    set.seed(the.year * 10 + (satellite.temp.var == "n.tempc"))
+    set.seed(the.year)
     stns = sort(unique(d$stn))
     stn.folds = data.table(key = "stn",
         stn = stns,
@@ -184,11 +189,13 @@ impute.nontemp.ground.vars = function(d, fold.i)
 
 train.model = function(dataset)
     lmer(data = dataset, ground.temp ~
-        satellite.temp + ndvi +
+        satellite.temp.day +
+        satellite.temp.night +
+        ndvi +
         elevation + aspectmean + roaddenmean +
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
         openplace +
-        (1 + satellite.temp | yday))
+        (1 + satellite.temp.day + satellite.temp.night | yday))
 
 # Create a named list `other.stns.by.dist` such that
 # `other.stns.by.dist[[stn]]` gives a vector of all the other
@@ -202,11 +209,11 @@ other.stns.by.dist = lapply(unique(ground$stn), function(the.stn)
        stn.dists[unique(ground$stn) == the.stn,])][-1])
 names(other.stns.by.dist) = unique(ground$stn)
 
-run.cv = function(the.year, ground.temp.var, satellite.temp.var)
+run.cv = function(the.year, ground.temp.var)
   # Under cross-validation, predict ground temperature using
   # satellite temperature over the given year.
-   {d.master = model.dataset(the.year, ground.temp.var, satellite.temp.var)
-    message(the.year, " ", ground.temp.var, " ", satellite.temp.var)
+   {d.master = model.dataset(the.year, ground.temp.var)
+    message(the.year, " ", ground.temp.var)
 
     results = future_lapply(1 : n.folds, function(fold.i)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
@@ -224,9 +231,9 @@ multirun = function(years)
   # Run cross-validation for each outcome in each of the given years,
   # and combine all the results into one big data.table.
    rbindlist(unlist(recursive = F, lapply(years, function(the.year) list(
-       cbind(run.cv(the.year, "low.temp", "n.tempc"), year = the.year, dv = "lo"),
-       cbind(run.cv(the.year, "temp.mean", "n.tempc"), year = the.year, dv = "mean"),
-       cbind(run.cv(the.year, "hi.temp", "d.tempc"), year = the.year, dv = "hi")))))
+       cbind(run.cv(the.year, "low.temp"), year = the.year, dv = "lo"),
+       cbind(run.cv(the.year, "temp.mean"), year = the.year, dv = "mean"),
+       cbind(run.cv(the.year, "hi.temp"), year = the.year, dv = "hi")))))
 
 months2seasons = factor(c(
   # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
@@ -284,8 +291,12 @@ summarize.results = function(multirun.output)
                 [, mean(p < .05), by = .(year, dv)]
                 [, .("Moran ps < .05" = V1)]),
         by.imp = d
-            [, eval(j1), keyby = .(year, dv, satellite.temp.imputed)]
-            [, .(year, dv, imp = satellite.temp.imputed,
+            [, eval(j1),
+                keyby = .(year, dv,
+                    satellite.temp.day.imputed, satellite.temp.night.imputed)]
+            [, .(year, dv,
+                imp.d = satellite.temp.day.imputed,
+                imp.n = satellite.temp.night.imputed,
                 N, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = d
             [, eval(j1), keyby = .(year, dv, season)]
