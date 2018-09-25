@@ -1,6 +1,6 @@
 library(data.table)
 library(FNN)
-library(glmnet)
+library(lme4)
 library(ape)
 
 source("../Just_universal/code/pairmemo.R")
@@ -188,25 +188,14 @@ impute.nontemp.ground.vars = function(d, fold.i)
     d}
 
 train.model = function(dataset)
-   {foldid = sample(rep(1 : n.folds, len = nrow(dataset)))
-    mm = function(d)
-        model.matrix(data = d, ~ 0 +
-            satellite.temp.day * satellite.temp.day.imputed +
-            satellite.temp.night * satellite.temp.night.imputed +
-            ndvi +
-            elevation + aspectmean + roaddenmean +
-            r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
-            openplace)
-    # Choose an alpha and lambda with inner cross-validation.
-    X = mm(dataset)
-    cvgs = lapply(c(0, .1, .25, .5, .75, .9, 1), function(alpha)
-        cv.glmnet(X, dataset$ground.temp, intercept = T,
-            alpha = alpha, type.measure = "mse",
-            foldid = foldid))
-    cvg = cvgs[[which.min(sapply(cvgs, function(cvg)
-        cvg$cvm[which(cvg$lambda == cvg$lambda.1se)]))]]
-    # Return a predictor function.
-    function(d) predict(cvg, mm(d), s = "lambda.1se")}
+    lmer(data = dataset, ground.temp ~
+        satellite.temp.day * satellite.temp.day.imputed +
+        satellite.temp.night * satellite.temp.night.imputed +
+        ndvi +
+        elevation + aspectmean + roaddenmean +
+        r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
+        openplace +
+        (1 + satellite.temp.day + satellite.temp.night | yday))
 
 # Create a named list `other.stns.by.dist` such that
 # `other.stns.by.dist[[stn]]` gives a vector of all the other
@@ -228,8 +217,9 @@ run.cv = function(the.year, ground.temp.var)
 
     results = future_lapply(1 : n.folds, function(fold.i)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
-        predictor = train.model(d[fold != fold.i])
-        d[fold == fold.i, .(stn, yday, pred = predictor(.SD))]})
+        m = train.model(d[fold != fold.i])
+        d[fold == fold.i, .(stn, yday, pred =
+            predict(m, .SD, allow.new.levels = T))]})
 
     for (d in results)
         d.master[.(d$stn, d$yday), pred := d$pred]
