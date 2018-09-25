@@ -189,8 +189,8 @@ impute.nontemp.ground.vars = function(d, fold.i)
 
 train.model = function(dataset)
     lmer(data = dataset, ground.temp ~
-        satellite.temp.day +
-        satellite.temp.night +
+        satellite.temp.day * satellite.temp.day.imputed +
+        satellite.temp.night * satellite.temp.night.imputed +
         ndvi +
         elevation + aspectmean + roaddenmean +
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
