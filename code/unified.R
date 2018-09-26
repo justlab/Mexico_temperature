@@ -138,7 +138,9 @@ model.dataset = function(the.year, ground.temp.var)
         ndvi,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
-        openplace, yday)]
+        openplace, yday,
+        time.sin = sinpi(2 * (yday - 1)/max(yday - 1)),
+        time.cos = cospi(2 * (yday - 1)/max(yday - 1)))]
 
     # Standardize most variables.
     for (col in setdiff(colnames(d), c(
@@ -192,6 +194,7 @@ train.model = function(dataset)
         satellite.temp.day * satellite.temp.day.imputed +
         satellite.temp.night * satellite.temp.night.imputed +
         ndvi +
+        time.sin + time.cos +
         elevation + aspectmean + roaddenmean +
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
         openplace +
