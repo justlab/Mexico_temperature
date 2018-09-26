@@ -301,7 +301,17 @@ summarize.results = function(multirun.output)
                 imp.d = satellite.temp.day.imputed,
                 imp.n = satellite.temp.night.imputed,
                 N, sd, rmse, "sd - rmse" = sd - rmse)],
-        by.season = d
-            [, eval(j1), keyby = .(year, dv, season)]
-            [, .(year, dv, season,
-                N, sd, rmse, "sd - rmse" = sd - rmse)])}
+        by.season = cbind(
+            d
+                [, eval(j1), keyby = .(year, dv, season)]
+                [, .(year, dv, season,
+                    N, sd, rmse, "sd - rmse" = sd - rmse)],
+            d
+                [, .(stn, merr = mean(pred - ground.temp)),
+                    keyby = .(year, dv, season, stn)]
+                [,
+                    .(Moran.I(
+                        merr,
+                        idist[ustns %in% stn, ustns %in% stn])$p.value),
+                    by = .(year, dv, season)]
+                [, .("Moran p" = V1)]))}
