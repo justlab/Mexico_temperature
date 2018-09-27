@@ -165,6 +165,18 @@ model.dataset = function(the.year, ground.temp.var)
 
     d}
 
+# Create a named list `other.stns.by.dist` such that
+# `other.stns.by.dist[[stn]]` gives a vector of all the other
+# stations ordered by distance from ``stn``, with the closest
+# first.
+stn.dists = as.matrix(dist(ground[
+    , head(.SD, 1), by = stn][
+    order(stn), .(latitude, longitude)]))
+other.stns.by.dist = lapply(unique(ground$stn), function(the.stn)
+    unique(ground$stn)[order(
+       stn.dists[unique(ground$stn) == the.stn,])][-1])
+names(other.stns.by.dist) = unique(ground$stn)
+
 impute.nontemp.ground.vars = function(d, fold.i)
   # For each ground-station variable (other than the DV,
   # temperature), substitute values that are missing or are
@@ -199,18 +211,6 @@ train.model = function(dataset)
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
         openplace +
         (1 + satellite.temp.day + satellite.temp.night | yday))
-
-# Create a named list `other.stns.by.dist` such that
-# `other.stns.by.dist[[stn]]` gives a vector of all the other
-# stations ordered by distance from ``stn``, with the closest
-# first.
-stn.dists = as.matrix(dist(ground[
-    , head(.SD, 1), by = stn][
-    order(stn), .(latitude, longitude)]))
-other.stns.by.dist = lapply(unique(ground$stn), function(the.stn)
-    unique(ground$stn)[order(
-       stn.dists[unique(ground$stn) == the.stn,])][-1])
-names(other.stns.by.dist) = unique(ground$stn)
 
 run.cv = function(the.year, ground.temp.var)
   # Under cross-validation, predict ground temperature using
