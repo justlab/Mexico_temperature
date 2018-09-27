@@ -14,6 +14,8 @@ aqua.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
 n.folds = 10
 available.years = 2003 : 2015
 
+temp.ground.vars = c(
+    "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
 nontemp.ground.vars = c(
     "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
 
@@ -29,6 +31,9 @@ fullgrid = fullgrid[,.(
 
 # Load the data from ground stations.
 ground = readRDS("data/work/all_stations_final.rds")
+setnames(ground,
+    c("low.temp", "temp.mean", "hi.temp"),
+    temp.ground.vars)
 # There are 39 cases in which we have more than one observation
 # for a particular station and day (which all happen to be in 2013
 # from station 76677). In each case, keep only the second of the
@@ -58,38 +63,36 @@ nearest.ids = merge(
     nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
 
 aqua.temp = function(year)
-   {message("Loading Aqua temperature ", year)
+   {message("Loading Aqua temperature for ", year)
     aqua = readRDS(file.path(aqua.dir, sprintf("MYD11A1_%d.rds", year)))
     message("Subsetting")
-    d = as.data.table(aqua[
-        aqua$lstid %in% nearest.ids$lstid,
-        c("lstid", "day", "d.tempc", "n.tempc")])
-    d = d[!is.na(d.tempc) | !is.na(n.tempc),
-       .(lstid, yday = yday(day), d.tempc, n.tempc)]
+    d = as.data.table(aqua)[
+        (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
+        .(lstid, yday = yday(day), d.tempc, n.tempc)]
     message("Writing")
     d}
-aqua.temp = pairmemo(aqua.temp, pairmemo.dir, mem = T, fst = T)
+aqua.temp = pairmemo(aqua.temp, pairmemo.dir, fst = T)
 
 aqua.ndvi = function(the.year)
-   {message("Loading Aqua NDVI ", the.year)
+   {message("Loading Aqua NDVI for ", the.year)
     aqua = readRDS(file.path(aqua.dir, sprintf("MYD13A3_%d.rds", the.year)))
     colnames(aqua)[colnames(aqua) == "lstid"] = "ndviid"
     message("Subsetting")
-    d = as.data.table(aqua[
-        aqua$ndviid %in% nearest.ids$ndviid,
-        c("ndviid", "day", "ndvi")])
-    d = d[!is.na(ndvi), .(ndviid, month = month(day), ndvi)]
+    d = as.data.table(aqua)[
+        !is.na(ndvi) & ndviid %in% fullgrid$ndviid,
+        .(ndviid, month = month(day), ndvi)]
     message("Writing")
     d}
-aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, mem = T, fst = T)
+aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, fst = T)
 
-model.dataset = function(the.year, ground.temp.var)
-   {# Get variables from the ground stations.
+model.dataset = function(the.year)
+   {message("Merging data sources for ", the.year)
+
+    # Get variables from the ground stations.
     d = ground[
         year(date) == the.year,
-        c(ground.temp.var, "stn", "date", nontemp.ground.vars),
+        c("stn", "date", temp.ground.vars, nontemp.ground.vars),
         with = F]
-    setnames(d, ground.temp.var, "ground.temp")
     d[, yday := yday(date)]
     d[, month := month(date)]
 
@@ -99,15 +102,15 @@ model.dataset = function(the.year, ground.temp.var)
         fullgrid[, .(
             lstid, elevation, aspectmean, roaddenmean, openplace)],
         by = "lstid",
-        all.x = T)
+        all = T)
 
     # Remove some high correlations by mean-centering.
-    d[, bar.mean := bar.mean - mean(bar.mean), by = elevation]
-    d[, roaddenmean := roaddenmean - mean(roaddenmean), by = openplace]
+    d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
+    d[, roaddenmean := roaddenmean - mean(roaddenmean, na.rm = T), by = openplace]
 
     # Merge in satellite data.
     d = merge(d,
-        aqua.temp(the.year)[lstid %in% d$lstid],
+        aqua.temp(the.year),
         by = c("lstid", "yday"),
         all = T)
     setnames(d,
@@ -116,35 +119,35 @@ model.dataset = function(the.year, ground.temp.var)
     d = merge(d,
         aqua.ndvi(the.year),
         by = c("ndviid", "month"),
-        all.x = T)
+        all = T)
 
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
+    message("Interpolating satellite temperature")
     for (vname in c("satellite.temp.day", "satellite.temp.night"))
        {d[, paste0(vname, ".imputed") := is.na(get(vname))]
-        d[,
+        d[!is.na(yday),
             (vname) := approx(
                 x = yday, y = get(vname), xout = yday,
                 method = "linear", rule = 2)$y,
             by = lstid]}
 
-    # We can now throw out rows with missing ground temperatures,
-    # and keep only the columns we want.
-    d = d[!is.na(ground.temp), .(
+    # Keep only the columns we want.
+    d = d[, .(
         stn,
-        ground.temp,
+        ground.temp.lo, ground.temp.mean, ground.temp.hi,
         satellite.temp.day, satellite.temp.day.imputed,
         satellite.temp.night, satellite.temp.night.imputed,
         ndvi,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
         openplace, yday,
-        time.sin = sinpi(2 * (yday - 1)/max(yday - 1)),
-        time.cos = cospi(2 * (yday - 1)/max(yday - 1)))]
+        time.sin = sinpi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)),
+        time.cos = cospi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)))]
 
     # Standardize most variables.
     for (col in setdiff(colnames(d), c(
-            "stn", "ground.temp",
+            "stn", temp.ground.vars,
             "satellite.temp.day.imputed", "satellite.temp.night.imputed",
             "yday")))
         d[[col]] = arm::rescale(d[[col]])
@@ -156,14 +159,15 @@ model.dataset = function(the.year, ground.temp.var)
     # The actual number of folds will be less than `n.folds` if
     # there aren't at least `n.folds` stations.
     set.seed(the.year)
-    stns = sort(unique(d$stn))
+    stns = sort(na.omit(unique(d$stn)))
     stn.folds = data.table(key = "stn",
         stn = stns,
         fold = sample(rep(1 : n.folds, len = length(stns))))
-    d = merge(d, stn.folds, by = "stn")
+    d = merge(d, stn.folds, by = "stn", all = T)
     setkey(d, stn, yday)
 
     d}
+model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
 # Create a named list `other.stns.by.dist` such that
 # `other.stns.by.dist[[stn]]` gives a vector of all the other
@@ -187,12 +191,14 @@ impute.nontemp.ground.vars = function(d, fold.i)
     for (ri in 1 : nrow(d))
        {this = d[ri,]
         for (vname in nontemp.ground.vars)
-            if (this$fold == fold.i || is.na(this[[vname]]))
+            if ((!is.null(fold.i) && this$fold == fold.i) ||
+                    is.na(this[[vname]]))
                {found = F
                 for (the.yday in this$yday : 1)
                    {for (other.stn in other.stns.by.dist[[as.character(this$stn)]])
                        {other = d[.(other.stn, the.yday),]
-                        if (other$fold != fold.i && !is.na(other[[vname]]))
+                        if ((is.null(fold.i) || other$fold != fold.i)
+                                && !is.na(other[[vname]]))
                            {d[ri, vname] = other[[vname]]
                             found = T
                             break}}
@@ -212,11 +218,13 @@ train.model = function(dataset)
         openplace +
         (1 + satellite.temp.day + satellite.temp.night | yday))
 
-run.cv = function(the.year, ground.temp.var)
+run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
   # satellite temperature over the given year.
-   {d.master = model.dataset(the.year, ground.temp.var)
-    message(the.year, " ", ground.temp.var)
+   {d.master = model.dataset(the.year)[!is.na(get(dvname))]
+    setnames(d.master, dvname, "ground.temp")
+    d.master[, setdiff(temp.ground.vars, dvname) := NULL]
+    message(the.year, " ", dvname)
 
     results = future_lapply(1 : n.folds, function(fold.i)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
@@ -230,13 +238,12 @@ run.cv = function(the.year, ground.temp.var)
     d.master}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
 
-multirun = function(years)
+multi.run.cv = function(years)
   # Run cross-validation for each outcome in each of the given years,
   # and combine all the results into one big data.table.
-   rbindlist(unlist(recursive = F, lapply(years, function(the.year) list(
-       cbind(run.cv(the.year, "low.temp"), year = the.year, dv = "lo"),
-       cbind(run.cv(the.year, "temp.mean"), year = the.year, dv = "mean"),
-       cbind(run.cv(the.year, "hi.temp"), year = the.year, dv = "hi")))))
+   rbindlist(unlist(recursive = F, lapply(years, function(the.year)
+       lapply(temp.ground.vars, function(dv)
+           cbind(run.cv(the.year, dv), year = the.year, dv = dv)))))
 
 months2seasons = factor(c(
   # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
@@ -258,8 +265,9 @@ months2seasons = factor(c(
     "ColdDry",  # Nov
     "ColdDry")) # Dec
 
-summarize.results = function(multirun.output)
+summarize.cv.results = function(multirun.output)
    {d = copy(multirun.output)
+    d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
     d[, season := months2seasons[
         month(as.Date(paste0(year, "-01-01")) + yday)]]
     idist = 1 / stn.dists
