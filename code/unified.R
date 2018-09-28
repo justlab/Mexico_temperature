@@ -121,13 +121,16 @@ model.dataset = function(the.year)
         by = c("ndviid", "month"),
         all = T)
 
+    # Only keep rows for which we have at least one ground or
+    # satellite measurement.
+    d = d[!is.na(yday)]
+
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
     message("Interpolating satellite temperature")
     for (vname in c("satellite.temp.day", "satellite.temp.night"))
        {d[, paste0(vname, ".imputed") := is.na(get(vname))]
-        d[!is.na(yday),
-            (vname) := approx(
+        d[, (vname) := approx(
                 x = yday, y = get(vname), xout = yday,
                 method = "linear", rule = 2)$y,
             by = lstid]}
