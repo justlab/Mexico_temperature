@@ -207,7 +207,8 @@ impute.nontemp.ground.vars = function(d, fold.i)
                             break}}
                     if (found)
                         break}
-                stopifnot(found)}}
+                if (!found)
+                    stop("No match found for ", fold.i, " ", ri, " ", vname)}}
     d}
 
 train.model = function(dataset)
@@ -227,7 +228,7 @@ run.cv = function(the.year, dvname)
    {d.master = model.dataset(the.year)[!is.na(get(dvname))]
     setnames(d.master, dvname, "ground.temp")
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
-    message(the.year, " ", dvname)
+    message("run.cv: ", the.year, " ", dvname)
 
     results = future_lapply(1 : n.folds, function(fold.i)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
