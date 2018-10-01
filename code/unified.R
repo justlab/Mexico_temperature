@@ -32,6 +32,9 @@ setkey(fullgrid, lstid)
 
 # Load the data from ground stations.
 ground = readRDS("data/work/all_stations_final.rds")
+# Remove the `lstid` column, because it isn't formatted consistently
+# with the satellite data.
+ground[, lstid := NULL]
 setnames(ground,
     c("low.temp", "temp.mean", "hi.temp"),
     temp.ground.vars)
@@ -48,7 +51,8 @@ stopifnot(all(
        .SDcols = c("latitude", "longitude")]$V1
     == 1))
 
-# Find the nearest LST and NDVI ID for each station.
+# Find the nearest `lstid` and `ndviid` (i.e., LST ID and NDVI
+# ID) for each station.
 nearest.id = function(longvar, latvar, idvar)
    {ground.station.pos = as.matrix(unique(ground[, .(longitude, latitude)]))
     fullgrid.pos = as.matrix(fullgrid[, c(longvar, latvar), with = F])
@@ -56,11 +60,10 @@ nearest.id = function(longvar, latvar, idvar)
         fullgrid.pos, ground.station.pos, k = 1))
     neighbors[, stn := unique(ground$stn)]
     neighbors[[idvar]] = fullgrid[neighbors$nn.index, idvar, with = F][[1]]
-    neighbors = neighbors[, c("stn", idvar), with = F]
-    setkey(neighbors, stn)
-    neighbors}
-nearest.ids = merge(
-    nearest.id("long_lst", "lat_lst", "lstid"),
+    neighbors[, c("stn", idvar), with = F]}
+ground = merge(ground, by = "stn",
+    nearest.id("long_lst", "lat_lst", "lstid"))
+ground = merge(ground, by = "stn",
     nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
 
 aqua.temp = function(year)
@@ -92,13 +95,13 @@ model.dataset = function(the.year)
     # Get variables from the ground stations.
     d = ground[
         year(date) == the.year,
-        c("stn", "date", temp.ground.vars, nontemp.ground.vars),
+        c("stn", "lstid", "ndviid", "date",
+            temp.ground.vars, nontemp.ground.vars),
         with = F]
     d[, yday := yday(date)]
     d[, month := month(date)]
 
     # Merge in land-use variables.
-    d = merge(d, nearest.ids, by = "stn", all.x = T)
     d = merge(d,
         fullgrid[, .(
             lstid, elevation, aspectmean, roaddenmean, openplace)],
