@@ -28,6 +28,7 @@ fullgrid = fullgrid[,.(
     elevation, aspectmean, roaddenmean, openplace,
     ndviid, long_ndvi, lat_ndvi,
     in_water)]
+setkey(fullgrid, lstid)
 
 # Load the data from ground stations.
 ground = readRDS("data/work/all_stations_final.rds")
@@ -137,7 +138,7 @@ model.dataset = function(the.year)
 
     # Keep only the columns we want.
     d = d[, .(
-        stn,
+        stn, lstid,
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
         satellite.temp.day, satellite.temp.day.imputed,
         satellite.temp.night, satellite.temp.night.imputed,
@@ -150,7 +151,8 @@ model.dataset = function(the.year)
 
     # Standardize most variables.
     for (col in setdiff(colnames(d), c(
-            "stn", temp.ground.vars,
+            "stn", "lstid",
+            temp.ground.vars,
             "satellite.temp.day.imputed", "satellite.temp.night.imputed",
             "yday")))
         d[[col]] = arm::rescale(d[[col]])
@@ -172,17 +174,20 @@ model.dataset = function(the.year)
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
-# Create a named list `other.stns.by.dist` such that
-# `other.stns.by.dist[[stn]]` gives a vector of all the other
-# stations ordered by distance from ``stn``, with the closest
-# first.
-stn.dists = as.matrix(dist(ground[
-    , head(.SD, 1), by = stn][
-    order(stn), .(latitude, longitude)]))
-other.stns.by.dist = lapply(unique(ground$stn), function(the.stn)
-    unique(ground$stn)[order(
-       stn.dists[unique(ground$stn) == the.stn,])][-1])
-names(other.stns.by.dist) = unique(ground$stn)
+# Create a matrix `stns.by.dist` such that `stns.by.dist[lstid,]`
+# gives a vector of all stations ordered by distance from
+# `lstid`, with the closest first.
+stns.by.dist = with(list(),
+   {fullgrid.pos = as.matrix(
+        fullgrid[, .(long_lst, lat_lst)])
+    ground.station.pos = as.matrix(unique(
+        ground[order(stn), .(longitude, latitude)]))
+    neighbors = get.knnx(
+        ground.station.pos, fullgrid.pos,
+        k = length(unique(ground$stn)))$nn.index
+    neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
+    rownames(neighbors) = fullgrid$lstid
+    neighbors})
 
 impute.nontemp.ground.vars = function(d, fold.i)
   # For each ground-station variable (other than the DV,
@@ -198,8 +203,8 @@ impute.nontemp.ground.vars = function(d, fold.i)
                     is.na(this[[vname]]))
                {found = F
                 for (the.yday in this$yday : 1)
-                   {for (other.stn in other.stns.by.dist[[as.character(this$stn)]])
-                       {other = d[.(other.stn, the.yday),]
+                   {for (the.stn in stns.by.dist[this$lstid,])
+                       {other = d[.(the.stn, the.yday),]
                         if ((is.null(fold.i) || other$fold != fold.i)
                                 && !is.na(other[[vname]]))
                            {d[ri, vname] = other[[vname]]
@@ -274,7 +279,8 @@ summarize.cv.results = function(multirun.output)
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
     d[, season := months2seasons[
         month(as.Date(paste0(year, "-01-01")) + yday)]]
-    idist = 1 / stn.dists
+    idist = 1 / as.matrix(dist(unique(
+        ground[order(stn), .(latitude, longitude)])))
     diag(idist) = 0
     ustns = unique(ground$stn)
     j1 = quote(.(.N, sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
