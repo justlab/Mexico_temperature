@@ -238,7 +238,7 @@ run.cv = function(the.year, dvname)
     for (d in results)
         d.master[.(d$stn, d$yday), pred := d$pred]
 
-    d.master}
+    cbind(d.master, year = the.year, dv = dvname)}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
 
 multi.run.cv = function(years)
@@ -246,7 +246,7 @@ multi.run.cv = function(years)
   # and combine all the results into one big data.table.
    rbindlist(unlist(recursive = F, lapply(years, function(the.year)
        lapply(temp.ground.vars, function(dv)
-           cbind(run.cv(the.year, dv), year = the.year, dv = dv)))))
+           run.cv(the.year, dv)))))
 
 months2seasons = factor(c(
   # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
