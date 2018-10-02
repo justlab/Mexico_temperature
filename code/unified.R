@@ -92,67 +92,84 @@ aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, fst = T)
 model.dataset = function(the.year)
    {message("Merging data sources for ", the.year)
 
-    # Get variables from the ground stations.
-    d = ground[
-        year(date) == the.year,
-        c("stn", "lstid", "ndviid", "date",
-            temp.ground.vars, nontemp.ground.vars),
-        with = F]
-    d[, yday := yday(date)]
-    d[, month := month(date)]
+    message("Constructing grid")
+    d = CJ(sorted = F,
+        lstid = fullgrid$lstid,
+        date = seq(
+            as.Date(paste0(the.year, "-01-01")),
+            as.Date(paste0(the.year, "-12-31")),
+            by = 1))
 
-    # Merge in land-use variables.
+    message("Rejiggering columns")
+    d[, `:=`(
+        yday = yday(date),
+        month = month(date),
+        date = NULL,
+        ndviid = fullgrid[lstid, ndviid])]
+
+    message("Merging in ground measurements")
+    # This step can increase the number of rows in `d` a bit because
+    # there can more than one ground station per `lstid`.
+    d = merge(d,
+        ground[
+            year(date) == 2013,
+            c(
+                mget(c("stn", "lstid")),
+                .(yday = yday(date)),
+                mget(temp.ground.vars), mget(nontemp.ground.vars))],
+        by = c("lstid", "yday"),
+        all.x = T)
+
+    # Merge in satellite data.
+    d = with(list(),
+       {at = aqua.temp(the.year)
+        message("Merging in satellite temperature")
+        merge(d, at, by = c("lstid", "yday"), all.x = T)})
+    setnames(d,
+        c("d.tempc", "n.tempc"),
+        c("satellite.temp.day", "satellite.temp.night"))
+    d = with(list(),
+       {an = aqua.ndvi(the.year)
+        message("Merging in NDVI")
+        merge(d, an, by = c("ndviid", "month"), all.x = T)})
+
+    message("Merging in land-use data")
     d = merge(d,
         fullgrid[, .(
             lstid, elevation, aspectmean, roaddenmean, openplace)],
         by = "lstid",
-        all = T)
+        all.x = T)
 
     # Remove some high correlations by mean-centering.
+    message("Decorrelating")
     d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
-    d[, roaddenmean := roaddenmean - mean(roaddenmean, na.rm = T), by = openplace]
-
-    # Merge in satellite data.
-    d = merge(d,
-        aqua.temp(the.year),
-        by = c("lstid", "yday"),
-        all = T)
-    setnames(d,
-        c("d.tempc", "n.tempc"),
-        c("satellite.temp.day", "satellite.temp.night"))
-    d = merge(d,
-        aqua.ndvi(the.year),
-        by = c("ndviid", "month"),
-        all = T)
-
-    # Only keep rows for which we have at least one ground or
-    # satellite measurement.
-    d = d[!is.na(yday)]
+    d[, roaddenmean := roaddenmean - mean(roaddenmean), by = openplace]
 
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
-    message("Interpolating satellite temperature")
     for (vname in c("satellite.temp.day", "satellite.temp.night"))
-       {d[, paste0(vname, ".imputed") := is.na(get(vname))]
+       {message("Interpolating ", vname)
+        d[, paste0(vname, ".imputed") := is.na(get(vname))]
         d[, (vname) := approx(
                 x = yday, y = get(vname), xout = yday,
                 method = "linear", rule = 2)$y,
             by = lstid]}
 
-    # Keep only the columns we want.
+    message("Reselecting variables")
     d = d[, .(
-        stn, lstid,
+        lstid, yday,
+        stn,
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
         satellite.temp.day, satellite.temp.day.imputed,
         satellite.temp.night, satellite.temp.night.imputed,
         ndvi,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
-        openplace, yday,
+        openplace,
         time.sin = sinpi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)),
         time.cos = cospi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)))]
 
-    # Standardize most variables.
+    message("Standardizing variables")
     for (col in setdiff(colnames(d), c(
             "stn", "lstid",
             temp.ground.vars,
@@ -166,14 +183,18 @@ model.dataset = function(the.year)
     #
     # The actual number of folds will be less than `n.folds` if
     # there aren't at least `n.folds` stations.
+    message("Choosing cross-validation folds")
     set.seed(the.year)
     stns = sort(na.omit(unique(d$stn)))
     stn.folds = data.table(key = "stn",
         stn = stns,
         fold = sample(rep(1 : n.folds, len = length(stns))))
     d = merge(d, stn.folds, by = "stn", all = T)
+
+    message("Setting key")
     setkey(d, stn, yday)
 
+    message("Writing")
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
