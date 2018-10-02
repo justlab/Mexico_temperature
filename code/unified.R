@@ -357,3 +357,60 @@ summarize.cv.results = function(multirun.output)
                         idist[ustns %in% stn, ustns %in% stn])$p.value),
                     by = .(year, dv, season)]
                 [, .("Moran p" = V1)]))}
+
+dedupe.lstid.days = function(d)
+  # There are some `lstids` that have more than one
+  # station, but we want to look up some data frames by
+  # `lstid`. So just keep the first station per `lstid` and
+  # day.
+    d[, head(.SD, 1), by = .(lstid, yday)]
+
+predict.temps = function(file)
+  # Predict a low, mean, and high temperature for each location
+  # and date.
+   {orig = readRDS(file)
+    d.query = with(orig, data.table(date = day, long = long48, lat = lat48))
+
+    # Find an appropriate `lstid` for each location.
+    query.pos = as.matrix(d.query[, .(long, lat)])
+    fullgrid.pos = as.matrix(fullgrid[, .(long_lst, lat_lst)])
+    neighbors = as.data.table(get.knnx(
+        fullgrid.pos, query.pos, k = 1))
+    d.query$lstid = fullgrid[neighbors$nn.index, lstid]
+
+    f = function(slice)
+       {the.year = slice[1, year(date)]
+
+        d.model = model.dataset(the.year)
+        message("Subsetting for ", the.year)
+        d.model = d.model[!is.na(stn) |
+            paste(lstid, yday) %in% slice[, paste(lstid, yday(date))]]
+        message("Imputing non-temperature ground variables for ", the.year)
+        d.model = impute.nontemp.ground.vars(d.model, fold.i = NULL)
+        setkey(d.model, lstid, yday, stn)
+
+        # If for a given `lstid` and day we have an actual ground
+        # measurement, we'll use that instead of the model prediction.
+        gr = ground[year(date) == the.year]
+        gr[, yday := yday(date)]
+        gr = dedupe.lstid.days(gr)
+        setkey(gr, lstid, yday)
+
+        sapply(simplify = F, temp.ground.vars, function(dvname)
+           {message("Predicting ", dvname)
+            d.model[, ground.temp := get(dvname)]
+            m = train.model(d.model[!is.na(ground.temp)])
+            newdata = dedupe.lstid.days(d.model)[
+                .(slice$lstid, yday(slice$date))]
+            pred = predict(m, newdata = newdata, allow.new.levels = T)
+            observed = gr[.(slice$lstid, yday(slice$date)), get(dvname)]
+            ifelse(is.na(observed), pred, observed)})}
+    d.query[, (temp.ground.vars) := f(.SD),
+       by = year(date),
+       .SDcols = c("date", "lstid")]
+
+    d.query[, .(
+        temperature.lo = ground.temp.lo,
+        temperature.mean = ground.temp.mean,
+        temperature.hi = ground.temp.hi)]}
+predict.temps = pairmemo(predict.temps, pairmemo.dir, mem = T, fst = T)
