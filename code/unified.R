@@ -9,7 +9,7 @@ pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 library(future.apply)
 plan(multiprocess)
 
-aqua.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
+satellite.data.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
 
 n.folds = 10
 available.years = 2003 : 2015
@@ -66,28 +66,27 @@ ground = merge(ground, by = "stn",
 ground = merge(ground, by = "stn",
     nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
 
-aqua.temp = function(year)
-   {message("Loading Aqua temperature for ", year)
-    aqua = readRDS(file.path(aqua.dir, sprintf("MYD11A1_%d.rds", year)))
-    message("Subsetting")
-    d = as.data.table(aqua)[
-        (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
-        .(lstid, yday = yday(day), d.tempc, n.tempc)]
-    message("Writing")
+get.satellite.data = function(satellite, product, the.year)
+   {stopifnot(satellite %in% c("terra", "aqua"))
+    stopifnot(product %in% c("temperature", "vegetation"))
+    message("Loading satellite data: ", paste(satellite, product, the.year))
+    d = as.data.table(readRDS(file.path(satellite.data.dir,
+        sprintf("%s%s_%d.rds",
+            c(terra = "MOD", aqua = "MYD")[satellite],
+            c(temperature = "11A1", vegetation = "13A3")[product],
+            the.year))))
+    if (product == "vegetation")
+        setnames(d, "lstid", "ndviid")
+    message("Subsetting satellite data")
+    d = (if (product == "temperature") d[
+            (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
+            .(lstid, yday = yday(day), d.tempc, n.tempc)]
+        else d[
+            !is.na(ndvi) & ndviid %in% fullgrid$ndviid,
+            .(ndviid, month = month(day), ndvi)])
+    message("Writing satellite data")
     d}
-aqua.temp = pairmemo(aqua.temp, pairmemo.dir, fst = T)
-
-aqua.ndvi = function(the.year)
-   {message("Loading Aqua NDVI for ", the.year)
-    aqua = readRDS(file.path(aqua.dir, sprintf("MYD13A3_%d.rds", the.year)))
-    colnames(aqua)[colnames(aqua) == "lstid"] = "ndviid"
-    message("Subsetting")
-    d = as.data.table(aqua)[
-        !is.na(ndvi) & ndviid %in% fullgrid$ndviid,
-        .(ndviid, month = month(day), ndvi)]
-    message("Writing")
-    d}
-aqua.ndvi = pairmemo(aqua.ndvi, pairmemo.dir, fst = T)
+get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
 
 model.dataset = function(the.year)
    {message("Merging data sources for ", the.year)
@@ -122,14 +121,14 @@ model.dataset = function(the.year)
 
     # Merge in satellite data.
     d = with(list(),
-       {at = aqua.temp(the.year)
+       {at = get.satellite.data("aqua", "temperature", the.year)
         message("Merging in satellite temperature")
         merge(d, at, by = c("lstid", "yday"), all.x = T)})
     setnames(d,
         c("d.tempc", "n.tempc"),
         c("satellite.temp.day", "satellite.temp.night"))
     d = with(list(),
-       {an = aqua.ndvi(the.year)
+       {an = get.satellite.data("aqua", "vegetation", the.year)
         message("Merging in NDVI")
         merge(d, an, by = c("ndviid", "month"), all.x = T)})
 
