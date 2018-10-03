@@ -121,16 +121,18 @@ model.dataset = function(the.year)
 
     # Merge in satellite data.
     d = with(list(),
-       {at = get.satellite.data("aqua", "temperature", the.year)
-        message("Merging in satellite temperature")
-        merge(d, at, by = c("lstid", "yday"), all.x = T)})
-    setnames(d,
-        c("d.tempc", "n.tempc"),
-        c("satellite.temp.day", "satellite.temp.night"))
-    d = with(list(),
-       {an = get.satellite.data("aqua", "vegetation", the.year)
-        message("Merging in NDVI")
-        merge(d, an, by = c("ndviid", "month"), all.x = T)})
+       {for (satellite in c("terra", "aqua"))
+           {st = get.satellite.data(satellite, "temperature", the.year)
+            message("Merging in ", satellite, " temperature")
+            d = merge(d, st, by = c("lstid", "yday"), all.x = T)
+            setnames(d,
+                c("d.tempc", "n.tempc"),
+                paste0(satellite, c(".temp.day", ".temp.night")))
+            sv = get.satellite.data(satellite, "vegetation", the.year)
+            message("Merging in ", satellite, " NDVI")
+            d = merge(d, sv, by = c("ndviid", "month"), all.x = T)
+            setnames(d, "ndvi", paste0(satellite, ".ndvi"))}
+        d})
 
     message("Merging in land-use data")
     d = merge(d,
@@ -146,7 +148,7 @@ model.dataset = function(the.year)
 
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
-    for (vname in c("satellite.temp.day", "satellite.temp.night"))
+    for (vname in grep("^(aqua|terra).temp\\.", colnames(d), value = T))
        {message("Interpolating ", vname)
         d[, paste0(vname, ".imputed") := is.na(get(vname))]
         d[, (vname) := approx(
@@ -159,9 +161,11 @@ model.dataset = function(the.year)
         lstid, yday,
         stn,
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
-        satellite.temp.day, satellite.temp.day.imputed,
-        satellite.temp.night, satellite.temp.night.imputed,
-        ndvi,
+        terra.temp.day, terra.temp.day.imputed,
+        terra.temp.night, terra.temp.night.imputed,
+        aqua.temp.day, aqua.temp.day.imputed,
+        aqua.temp.night, aqua.temp.night.imputed,
+        ndvi = (terra.ndvi + aqua.ndvi)/2,
         elevation, aspectmean, roaddenmean,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
         openplace,
@@ -172,7 +176,7 @@ model.dataset = function(the.year)
     for (col in setdiff(colnames(d), c(
             "stn", "lstid",
             temp.ground.vars,
-            "satellite.temp.day.imputed", "satellite.temp.night.imputed",
+            grep("imputed", colnames(d), value = T),
             "yday")))
         d[[col]] = arm::rescale(d[[col]])
 
@@ -241,14 +245,16 @@ impute.nontemp.ground.vars = function(d, fold.i)
 
 train.model = function(dataset)
     lmer(data = dataset, ground.temp ~
-        satellite.temp.day * satellite.temp.day.imputed +
-        satellite.temp.night * satellite.temp.night.imputed +
+        terra.temp.day * terra.temp.day.imputed +
+        terra.temp.night * terra.temp.night.imputed +
+        aqua.temp.day * aqua.temp.day.imputed +
+        aqua.temp.night * aqua.temp.night.imputed +
         ndvi +
         time.sin + time.cos +
         elevation + aspectmean + roaddenmean +
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
         openplace +
-        (1 + satellite.temp.day + satellite.temp.night | yday))
+        (1 | yday))
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
@@ -334,14 +340,6 @@ summarize.cv.results = function(multirun.output)
                     by = .(year, dv, yday)]
                 [, mean(p < .05), by = .(year, dv)]
                 [, .("Moran ps < .05" = V1)]),
-        by.imp = d
-            [, eval(j1),
-                keyby = .(year, dv,
-                    satellite.temp.day.imputed, satellite.temp.night.imputed)]
-            [, .(year, dv,
-                imp.d = satellite.temp.day.imputed,
-                imp.n = satellite.temp.night.imputed,
-                N, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = cbind(
             d
                 [, eval(j1), keyby = .(year, dv, season)]
