@@ -112,7 +112,7 @@ model.dataset = function(the.year)
     # there can more than one ground station per `lstid`.
     d = merge(d,
         ground[
-            year(date) == 2013,
+            year(date) == the.year,
             c(
                 mget(c("stn", "lstid")),
                 .(yday = yday(date)),
