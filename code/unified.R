@@ -3,7 +3,8 @@ suppressPackageStartupMessages(
     library(FNN)
     library(lme4)
     library(ape)
-    library(future.apply)})
+    library(future.apply)
+    library(zeallot)})
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
@@ -20,52 +21,72 @@ temp.ground.vars = c(
 nontemp.ground.vars = c(
     "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
 
-# Import the clipped grid of the Mexico study area.
-fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
-fullgrid[, lstid := paste0(long_lst, "-", lat_lst)]
-fullgrid[, ndviid := paste0(long_ndvi, "-", lat_ndvi)]
-fullgrid = fullgrid[,.(
-    lstid, long_lst, lat_lst,
-    elevation, aspectmean, roaddenmean, openplace,
-    ndviid, long_ndvi, lat_ndvi,
-    in_water)]
-setkey(fullgrid, lstid)
+get.nonsatellite.data = function()
+   {# Load the clipped grid of the Mexico study area.
+    fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
+    fullgrid[, lstid := paste0(long_lst, "-", lat_lst)]
+    fullgrid[, ndviid := paste0(long_ndvi, "-", lat_ndvi)]
+    fullgrid = fullgrid[, .(
+        lstid, long_lst, lat_lst,
+        elevation, aspectmean, roaddenmean, openplace,
+        ndviid, long_ndvi, lat_ndvi,
+        in_water)]
+    setkey(fullgrid, lstid)
 
-# Load the data from ground stations.
-ground = readRDS("data/work/all_stations_final.rds")
-# Remove the `lstid` column, because it isn't formatted consistently
-# with the satellite data.
-ground[, lstid := NULL]
-setnames(ground,
-    c("low.temp", "temp.mean", "hi.temp"),
-    temp.ground.vars)
-# There are 39 cases in which we have more than one observation
-# for a particular station and day (which all happen to be in 2013
-# from station 76677). In each case, keep only the second of the
-# two observations.
-stopifnot(ground[, .N, by = .(date, stn)][N > 1, .N] == 39)
-ground = ground[, head(.SD, 1), by = .(date, stn)]
-setkey(ground, stn)
-# Each station should have only one position.
-stopifnot(all(
-    ground[, nrow(unique(.SD)), by = stn,
-       .SDcols = c("latitude", "longitude")]$V1
-    == 1))
+    # Load the data from ground stations.
+    ground = readRDS("data/work/all_stations_final.rds")
+    # Remove the `lstid` column, because it isn't formatted consistently
+    # with the satellite data.
+    ground[, lstid := NULL]
+    setnames(ground,
+        c("low.temp", "temp.mean", "hi.temp"),
+        temp.ground.vars)
+    # There are 39 cases in which we have more than one observation
+    # for a particular station and day (which all happen to be in 2013
+    # from station 76677). In each case, keep only the second of the
+    # two observations.
+    stopifnot(ground[, .N, by = .(date, stn)][N > 1, .N] == 39)
+    ground = ground[, head(.SD, 1), by = .(date, stn)]
+    setkey(ground, stn)
+    # Each station should have only one position.
+    stopifnot(all(
+        ground[, nrow(unique(.SD)), by = stn,
+           .SDcols = c("latitude", "longitude")]$V1
+        == 1))
 
-# Find the nearest `lstid` and `ndviid` (i.e., LST ID and NDVI
-# ID) for each station.
-nearest.id = function(longvar, latvar, idvar)
-   {ground.station.pos = as.matrix(unique(ground[, .(longitude, latitude)]))
-    fullgrid.pos = as.matrix(fullgrid[, c(longvar, latvar), with = F])
-    neighbors = as.data.table(get.knnx(
-        fullgrid.pos, ground.station.pos, k = 1))
-    neighbors[, stn := unique(ground$stn)]
-    neighbors[[idvar]] = fullgrid[neighbors$nn.index, idvar, with = F][[1]]
-    neighbors[, c("stn", idvar), with = F]}
-ground = merge(ground, by = "stn",
-    nearest.id("long_lst", "lat_lst", "lstid"))
-ground = merge(ground, by = "stn",
-    nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
+    # Find the nearest `lstid` and `ndviid` (i.e., LST ID and NDVI
+    # ID) for each station.
+    nearest.id = function(longvar, latvar, idvar)
+       {ground.station.pos = as.matrix(unique(ground[, .(longitude, latitude)]))
+        fullgrid.pos = as.matrix(fullgrid[, c(longvar, latvar), with = F])
+        neighbors = as.data.table(get.knnx(
+            fullgrid.pos, ground.station.pos, k = 1))
+        neighbors[, stn := unique(ground$stn)]
+        neighbors[[idvar]] = fullgrid[neighbors$nn.index, idvar, with = F][[1]]
+        neighbors[, c("stn", idvar), with = F]}
+    ground = merge(ground, by = "stn",
+        nearest.id("long_lst", "lat_lst", "lstid"))
+    ground = merge(ground, by = "stn",
+        nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
+
+    # Create a matrix `stns.by.dist` such that `stns.by.dist[lstid,]`
+    # gives a vector of all stations ordered by distance from
+    # `lstid`, with the closest first.
+    fullgrid.pos = as.matrix(
+        fullgrid[, .(long_lst, lat_lst)])
+    ground.station.pos = as.matrix(unique(
+        ground[order(stn), .(longitude, latitude)]))
+    neighbors = get.knnx(
+        ground.station.pos, fullgrid.pos,
+        k = length(unique(ground$stn)))$nn.index
+    neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
+    rownames(neighbors) = fullgrid$lstid
+    stns.by.dist = neighbors
+
+    list(fullgrid, ground, stns.by.dist)}
+if (!exists("fullgrid"))
+    c(fullgrid, ground, stns.by.dist) %<-%
+        pairmemo(get.nonsatellite.data, pairmemo.dir)()
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
@@ -201,21 +222,6 @@ model.dataset = function(the.year)
     message("Writing")
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
-
-# Create a matrix `stns.by.dist` such that `stns.by.dist[lstid,]`
-# gives a vector of all stations ordered by distance from
-# `lstid`, with the closest first.
-stns.by.dist = with(list(),
-   {fullgrid.pos = as.matrix(
-        fullgrid[, .(long_lst, lat_lst)])
-    ground.station.pos = as.matrix(unique(
-        ground[order(stn), .(longitude, latitude)]))
-    neighbors = get.knnx(
-        ground.station.pos, fullgrid.pos,
-        k = length(unique(ground$stn)))$nn.index
-    neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
-    rownames(neighbors) = fullgrid$lstid
-    neighbors})
 
 impute.nontemp.ground.vars = function(d, fold.i)
   # For each ground-station variable (other than the DV,
