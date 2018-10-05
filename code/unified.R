@@ -1,15 +1,16 @@
-library(data.table)
-library(FNN)
-library(lme4)
-library(ape)
+suppressPackageStartupMessages(
+   {library(data.table)
+    library(FNN)
+    library(lme4)
+    library(ape)
+    library(future.apply)})
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
-library(future.apply)
-plan(multiprocess)
-
 satellite.data.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
+
+plan(multiprocess)
 
 n.folds = 10
 available.years = 2003 : 2015
