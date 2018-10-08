@@ -4,7 +4,8 @@ suppressPackageStartupMessages(
     library(lme4)
     library(ape)
     library(future.apply)
-    library(zeallot)})
+    library(zeallot)
+    library(caret)})
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
@@ -110,12 +111,21 @@ get.satellite.data = function(satellite, product, the.year)
     d}
 get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
 
-model.dataset = function(the.year)
-   {message("Merging data sources for ", the.year)
+lstid.sets = list()
+
+model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
+   {if (!xor(!is.null(lstid.set), nonmissing.ground.temp))
+        stop("Either enable `nonmissing.ground.temp` to get all points with non-missing ground temperatures, or choose a `lstid.set` to get all days for the selected `lstid`s.")
+
+    message("Merging data sources: ",
+        the.year, " ", lstid.set, " ", nonmissing.ground.temp)
 
     message("Constructing grid")
     d = CJ(sorted = F,
-        lstid = fullgrid$lstid,
+        lstid = (if (nonmissing.ground.temp)
+                sort(ground[year(date) == the.year, unique(lstid)])
+            else
+                lstid.sets[[lstid.set]]),
         date = seq(
             as.Date(paste0(the.year, "-01-01")),
             as.Date(paste0(the.year, "-12-31")),
@@ -142,7 +152,7 @@ model.dataset = function(the.year)
         all.x = T)
 
     # Merge in satellite data.
-    d = with(list(),
+    d = local(
        {for (satellite in c("terra", "aqua"))
            {st = get.satellite.data(satellite, "temperature", the.year)
             message("Merging in ", satellite, " temperature")
@@ -168,6 +178,12 @@ model.dataset = function(the.year)
     d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
     d[, roaddenmean := roaddenmean - mean(roaddenmean), by = openplace]
 
+    if (nonmissing.ground.temp)
+       {message("Dropping")
+        d = d[0 < rowSums(!is.na(d[,
+            grep("\\.temp\\.", colnames(d), val = T),
+            with = F]))]}
+
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
     for (vname in grep("^(aqua|terra).temp\\.", colnames(d), value = T))
@@ -177,6 +193,10 @@ model.dataset = function(the.year)
                 x = yday, y = get(vname), xout = yday,
                 method = "linear", rule = 2)$y,
             by = lstid]}
+
+    if (nonmissing.ground.temp)
+       {message("Dropping")
+        d = d[0 < rowSums(!is.na(d[, ..temp.ground.vars]))]}
 
     message("Reselecting variables")
     d = d[, .(
@@ -194,27 +214,22 @@ model.dataset = function(the.year)
         time.sin = sinpi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)),
         time.cos = cospi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)))]
 
-    message("Standardizing variables")
-    for (col in setdiff(colnames(d), c(
-            "stn", "lstid",
-            temp.ground.vars,
-            grep("imputed", colnames(d), value = T),
-            "yday")))
-        d[[col]] = arm::rescale(d[[col]])
-
-    # Split the ground stations into cross-validation folds. This
-    # has to be done on a per-year basis because not all stations
-    # are present in all cases.
-    #
-    # The actual number of folds will be less than `n.folds` if
-    # there aren't at least `n.folds` stations.
-    message("Choosing cross-validation folds")
-    set.seed(the.year)
-    stns = sort(na.omit(unique(d$stn)))
-    stn.folds = data.table(key = "stn",
-        stn = stns,
-        fold = sample(rep(1 : n.folds, len = length(stns))))
-    d = merge(d, stn.folds, by = "stn", all = T)
+    if (nonmissing.ground.temp)
+      # Split the ground stations into cross-validation folds. This
+      # has to be done on a per-year basis because not all stations
+      # are present in all cases.
+      #
+      # The actual number of folds will be less than `n.folds` if
+      # there aren't at least `n.folds` stations.
+       {message("Choosing cross-validation folds")
+        set.seed(the.year)
+        stns = sort(na.omit(unique(d$stn)))
+        stn.folds = data.table(key = "stn",
+            stn = stns,
+            fold = sample(rep(1 : n.folds, len = length(stns))))
+        d = merge(d, stn.folds, by = "stn", all = T)}
+    else
+        d$fold = NA
 
     message("Setting key")
     setkey(d, stn, yday)
@@ -251,7 +266,7 @@ impute.nontemp.ground.vars = function(d, fold.i)
     d}
 
 train.model = function(dataset)
-    lmer(data = dataset, ground.temp ~
+   {fe = (~
         terra.temp.day * terra.temp.day.imputed +
         terra.temp.night * terra.temp.night.imputed +
         aqua.temp.day * aqua.temp.day.imputed +
@@ -260,22 +275,29 @@ train.model = function(dataset)
         time.sin + time.cos +
         elevation + aspectmean + roaddenmean +
         r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
-        openplace +
-        (1 | yday))
+        openplace)
+    preproc = preProcess(method = c("center", "scale"),
+        dataset[,
+            setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
+            with = F])
+    m = lmer(data = predict(preproc, dataset), update.formula(fe,
+        ground.temp ~ . + (1 | yday)))
+    function(newdata)
+       predict(m, newdata = predict(preproc, newdata),
+           allow.new.levels = T)}
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
   # satellite temperature over the given year.
-   {d.master = model.dataset(the.year)[!is.na(get(dvname))]
+   {d.master = copy(model.dataset(the.year, nonmissing.ground.temp = T))
     setnames(d.master, dvname, "ground.temp")
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
     message("run.cv: ", the.year, " ", dvname)
 
     results = future_lapply(1 : n.folds, function(fold.i)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
-        m = train.model(d[fold != fold.i])
-        d[fold == fold.i, .(stn, yday, pred =
-            predict(m, .SD, allow.new.levels = T))]})
+        f.pred = train.model(d[fold != fold.i])
+        d[fold == fold.i, .(stn, yday, pred = f.pred(.SD))]})
 
     for (d in results)
         d.master[.(d$stn, d$yday), pred := d$pred]
@@ -385,10 +407,17 @@ predict.temps = function(file)
     f = function(slice)
        {the.year = slice[1, year(date)]
 
-        d.model = model.dataset(the.year)
-        message("Subsetting for ", the.year)
-        d.model = d.model[!is.na(stn) |
-            paste(lstid, yday) %in% slice[, paste(lstid, yday(date))]]
+        # Construct `d.model` to contain to have a row for each time
+        # (`yday`) and place (`lstid`) that either:
+        # - has a non-missing ground temperature (used for training)
+        # - is present in `slice` (used for prediction)
+        lstid.sets[[paste(file, the.year)]] <<- sort(unique(slice$lstid))
+        d.model = model.dataset(the.year, nonmissing.ground.temp = T)
+        d.model = rbind(d.model,
+            model.dataset(the.year, lstid.set = paste(file, the.year))[
+                paste(lstid, yday) %in% slice[, paste(lstid, yday(date))] &
+                !(paste(lstid, yday) %in% d.model[, paste(lstid, yday)])])
+        setkey(d.model, stn, yday)
         message("Imputing non-temperature ground variables for ", the.year)
         d.model = impute.nontemp.ground.vars(d.model, fold.i = NULL)
         setkey(d.model, lstid, yday, stn)
@@ -403,10 +432,9 @@ predict.temps = function(file)
         sapply(simplify = F, temp.ground.vars, function(dvname)
            {message("Predicting ", dvname)
             d.model[, ground.temp := get(dvname)]
-            m = train.model(d.model[!is.na(ground.temp)])
-            newdata = dedupe.lstid.days(d.model)[
-                .(slice$lstid, yday(slice$date))]
-            pred = predict(m, newdata = newdata, allow.new.levels = T)
+            f.pred = train.model(d.model[!is.na(ground.temp)])
+            pred = f.pred(dedupe.lstid.days(d.model)[
+                .(slice$lstid, yday(slice$date))])
             observed = gr[.(slice$lstid, yday(slice$date)), get(dvname)]
             ifelse(is.na(observed), pred, observed)})}
     d.query[, (temp.ground.vars) := f(.SD),
