@@ -234,13 +234,13 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
-impute.nontemp.ground.vars = function(d, fold.i)
+impute.nontemp.ground.vars = function(d.orig, fold.i)
   # For each ground-station variable (other than the DV,
   # temperature), substitute values that are missing or are
   # currently in the test fold. We use the nearest station
   # that has an eligible value on the same day (or a
   # previous day, if we can't find one on the same day).
-   {d = copy(d)
+   {d = copy(d.orig)
     for (ri in 1 : nrow(d))
        {this = d[ri,]
         for (vname in nontemp.ground.vars)
@@ -249,7 +249,7 @@ impute.nontemp.ground.vars = function(d, fold.i)
                {found = F
                 for (the.yday in this$yday : 1)
                    {for (the.stn in stns.by.dist[this$lstid,])
-                       {other = d[.(the.stn, the.yday),]
+                       {other = d.orig[.(the.stn, the.yday),]
                         if ((is.null(fold.i) || other$fold != fold.i)
                                 && !is.na(other[[vname]]))
                            {d[ri, vname] = other[[vname]]
