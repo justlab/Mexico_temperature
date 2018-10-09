@@ -72,9 +72,10 @@ get.nonsatellite.data = function()
     ground = merge(ground, by = "stn",
         nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
 
-    # Create a matrix `stns.by.dist` such that `stns.by.dist[lstid,]`
-    # gives a vector of all stations ordered by distance from
-    # `lstid`, with the closest first.
+    # Create an environment `stns.by.dist` such that
+    # `stns.by.dist[[lstid]]` gives a vector of all stations
+    # ordered by distance from `lstid`, with the closest first.
+    message("Populating stns.by.dist")
     fullgrid.pos = as.matrix(
         fullgrid[, .(long_lst, lat_lst)])
     ground.station.pos = as.matrix(unique(
@@ -83,8 +84,10 @@ get.nonsatellite.data = function()
         ground.station.pos, fullgrid.pos,
         k = length(unique(ground$stn)))$nn.index
     neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
-    rownames(neighbors) = fullgrid$lstid
-    stns.by.dist = neighbors
+    stns.by.dist = new.env(parent = emptyenv())
+    lstids = fullgrid$lstid
+    for (i in seq_along(lstids))
+        stns.by.dist[[lstids[i]]] = neighbors[i,]
 
     list(fullgrid, ground, stns.by.dist)}
 get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
@@ -251,7 +254,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
                     is.na(this[[vname]]))
                {found = F
                 for (the.yday in this$yday : 1)
-                   {for (the.stn in stns.by.dist[this$lstid,])
+                   {for (the.stn in stns.by.dist[[this$lstid]])
                        {other = d.orig[.(the.stn, the.yday),]
                         if ((is.null(fold.i) || other$fold != fold.i)
                                 && !is.na(other[[vname]]))
