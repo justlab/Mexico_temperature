@@ -84,9 +84,8 @@ get.nonsatellite.data = function()
     stns.by.dist = neighbors
 
     list(fullgrid, ground, stns.by.dist)}
-if (!exists("fullgrid"))
-    c(fullgrid, ground, stns.by.dist) %<-%
-        pairmemo(get.nonsatellite.data, pairmemo.dir)()
+get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
+c(fullgrid, ground, stns.by.dist) %<-% get.nonsatellite.data()
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
