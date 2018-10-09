@@ -29,9 +29,8 @@ get.nonsatellite.data = function()
     fullgrid[, ndviid := paste0(long_ndvi, "-", lat_ndvi)]
     fullgrid = fullgrid[, .(
         lstid, long_lst, lat_lst,
-        elevation, aspectmean, roaddenmean, openplace,
         ndviid, long_ndvi, lat_ndvi,
-        in_water)]
+        elevation)]
     setkey(fullgrid, lstid)
 
     # Load the data from ground stations.
@@ -169,14 +168,13 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
     message("Merging in land-use data")
     d = merge(d,
         fullgrid[, .(
-            lstid, elevation, aspectmean, roaddenmean, openplace)],
+            lstid, elevation)],
         by = "lstid",
         all.x = T)
 
-    # Remove some high correlations by mean-centering.
+    # Remove a high correlation by mean-centering.
     message("Decorrelating")
     d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
-    d[, roaddenmean := roaddenmean - mean(roaddenmean), by = openplace]
 
     if (nonmissing.ground.temp)
        {message("Dropping")
@@ -208,9 +206,8 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
         aqua.temp.day, aqua.temp.day.imputed,
         aqua.temp.night, aqua.temp.night.imputed,
         ndvi = (terra.ndvi + aqua.ndvi)/2,
-        elevation, aspectmean, roaddenmean,
+        elevation,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
-        openplace,
         time.sin = sinpi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)),
         time.cos = cospi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)))]
 
@@ -273,9 +270,8 @@ train.model = function(dataset)
         aqua.temp.night * aqua.temp.night.imputed +
         ndvi +
         time.sin + time.cos +
-        elevation + aspectmean + roaddenmean +
-        r.humidity.mean + bar.mean + rain.mean + wind.speed.mean +
-        openplace)
+        elevation +
+        r.humidity.mean + bar.mean + rain.mean + wind.speed.mean)
     preproc = preProcess(method = c("center", "scale"),
         dataset[,
             setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
