@@ -247,24 +247,49 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
   # that has an eligible value on the same day (or a
   # previous day, if we can't find one on the same day).
    {d = copy(d.orig)
-    for (ri in 1 : nrow(d))
-       {this = d[ri,]
-        for (vname in nontemp.ground.vars)
-            if ((!is.null(fold.i) && this$fold == fold.i) ||
-                    is.na(this[[vname]]))
+    folds = d$fold
+    ydays = d$yday
+    lstids = d$lstid
+    ustn = as.character(unique(d.orig$stn))
+
+    for (vname in nontemp.ground.vars)
+       {column = d[[vname]]
+
+        # Create `other.vs` (and likewise `other.folds`) such that
+        # `other.vs[[stn]][yday]` gives the value of `vname` at
+        # station `stn` on day of the year `yday`.
+        other.vs = new.env(parent = emptyenv())
+        other.folds = new.env(parent = emptyenv())
+        for (the.stn in ustn)
+           {piece = d.orig[
+                stn == as.integer(the.stn),
+                .(yday, v = get(vname), fold)]
+            other.vs[[the.stn]] = rep(NA_real_, max(d$yday))
+            other.vs[[the.stn]][piece$yday] = piece$v
+            other.folds[[the.stn]] = rep(NA_integer_, max(d$yday))
+            other.folds[[the.stn]][piece$yday] = piece$fold}
+
+        # Now look at each value of `column` in turn to see if it
+        # needs a substitute.
+        for (ri in seq_along(column))
+           {if ((!is.null(fold.i) && folds[ri] == fold.i) ||
+                    is.na(column[ri]))
                {found = F
-                for (the.yday in this$yday : 1)
-                   {for (the.stn in stns.by.dist[[this$lstid]])
-                       {other = d.orig[.(the.stn, the.yday),]
-                        if ((is.null(fold.i) || other$fold != fold.i)
-                                && !is.na(other[[vname]]))
-                           {d[ri, vname] = other[[vname]]
+                for (the.yday in ydays[ri] : 1)
+                   {for (the.stn in as.character(stns.by.dist[[lstids[ri]]]))
+                       {if (exists(the.stn, other.vs)
+                                && (is.null(fold.i) || other.folds[[the.stn]][the.yday] != fold.i)
+                                && !is.na(other.vs[[the.stn]][the.yday]))
+                           {column[ri] = other.vs[[the.stn]][the.yday]
                             found = T
                             break}}
                     if (found)
                         break}
                 if (!found)
                     stop("No match found for ", fold.i, " ", ri, " ", vname)}}
+
+        d[[vname]] = column}
+
     d}
 
 train.model = function(dataset)
@@ -295,13 +320,10 @@ run.cv = function(the.year, dvname)
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
     message("run.cv: ", the.year, " ", dvname)
 
-    results = future_lapply(1 : n.folds, function(fold.i)
+    for (fold.i in 1 : n.folds)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
         f.pred = train.model(d[fold != fold.i])
-        d[fold == fold.i, .(stn, yday, pred = f.pred(.SD))]})
-
-    for (d in results)
-        d.master[.(d$stn, d$yday), pred := d$pred]
+        d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]}
 
     cbind(d.master, year = the.year, dv = dvname)}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
