@@ -331,9 +331,10 @@ run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
 multi.run.cv = function(years)
   # Run cross-validation for each outcome in each of the given years,
   # and combine all the results into one big data.table.
-   rbindlist(unlist(recursive = F, lapply(years, function(the.year)
-       lapply(temp.ground.vars, function(dv)
-           run.cv(the.year, dv)))))
+  {args = expand.grid(the.year = years, dv = temp.ground.vars,
+       stringsAsFactors = F)
+   rbindlist(lapply(1 : nrow(args), function(i)
+       run.cv(args[i, "the.year"], args[i, "dv"])))}
 
 months2seasons = factor(c(
   # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
