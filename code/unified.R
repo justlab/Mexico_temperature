@@ -24,6 +24,7 @@ nontemp.ground.vars = c(
 
 get.nonsatellite.data = function()
    {# Load the clipped grid of the Mexico study area.
+    message("Loading spatial grid")
     fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
     fullgrid[, lstid := paste0(long_lst, "-", lat_lst)]
     fullgrid[, ndviid := paste0(long_ndvi, "-", lat_ndvi)]
@@ -34,6 +35,7 @@ get.nonsatellite.data = function()
     setkey(fullgrid, lstid)
 
     # Load the data from ground stations.
+    message("Loading ground data")
     ground = readRDS("data/work/all_stations_final.rds")
     # Remove the `lstid` column, because it isn't formatted consistently
     # with the satellite data.
@@ -56,6 +58,7 @@ get.nonsatellite.data = function()
 
     # Find the nearest `lstid` and `ndviid` (i.e., LST ID and NDVI
     # ID) for each station.
+    message("Matching up spatial grid with ground data")
     nearest.id = function(longvar, latvar, idvar)
        {ground.station.pos = as.matrix(unique(ground[, .(longitude, latitude)]))
         fullgrid.pos = as.matrix(fullgrid[, c(longvar, latvar), with = F])
