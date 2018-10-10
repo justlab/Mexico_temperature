@@ -10,7 +10,8 @@ suppressPackageStartupMessages(
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
-satellite.data.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
+satellite.temperature.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
+satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
 
 plan(multiprocess)
 
@@ -97,20 +98,49 @@ get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
     stopifnot(product %in% c("temperature", "vegetation"))
     message("Loading satellite data: ", paste(satellite, product, the.year))
-    d = as.data.table(readRDS(file.path(satellite.data.dir,
-        sprintf("%s%s_%d.rds",
-            c(terra = "MOD", aqua = "MYD")[satellite],
-            c(temperature = "11A1", vegetation = "13A3")[product],
-            the.year))))
-    if (product == "vegetation")
-        setnames(d, "lstid", "ndviid")
-    message("Subsetting satellite data")
-    d = (if (product == "temperature") d[
+    satellite.code = c(terra = "MOD", aqua = "MYD")[satellite]
+
+    if (product == "temperature")
+       {d = as.data.table(readRDS(file.path(satellite.temperature.dir,
+            sprintf("%s11A1_%d.rds", satellite.code, the.year))))
+        message("Subsetting satellite data")
+        d = d[
             (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
-            .(lstid, yday = yday(day), d.tempc, n.tempc)]
-        else d[
-            !is.na(ndvi) & ndviid %in% fullgrid$ndviid,
-            .(ndviid, month = month(day), ndvi)])
+            .(lstid, yday = yday(day), d.tempc, n.tempc)]}
+
+    else
+       {suppressPackageStartupMessages(
+           {library(raster)
+            library(rgdal)
+            library(gdalUtils)})
+        month.daynums = c(
+            '001', '032', '060', '091', '121', '152',
+            '182', '213', '244', '274', '305', '335')
+
+        files = grep(fixed = T, value = T,
+            paste0(satellite.code, "13A3.A", the.year),
+            dir(satellite.vegetation.dir, full.names = T))
+        d = rbindlist(future_lapply(files, function(fname)
+           {d = raster(readGDAL(silent = T, paste0(
+                "HDF4_EOS:EOS_GRID:",
+                fname,
+                ":MOD_Grid_monthly_1km_VI:1 km monthly NDVI")))
+            d = as.data.table(spTransform(rasterToPoints(d, spatial = T),
+                "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+
+            setnames(d, "band1", "ndvi")
+            d[, ndviid := paste0(round(x, 3), "-", round(y, 3))]
+            d[, `:=`(x = NULL, y = NULL)]
+            d = d[!is.na(ndvi) & ndviid %in% fullgrid$ndviid]
+
+            daynum = regmatches(fname, regexec("\\.A\\d{4}(\\d{3})", fname))[[1]][2]
+            d$month = which(
+                month.daynums == daynum |
+                month.daynums == sprintf('%03d', as.integer(daynum) - 1))
+
+            setcolorder(d, c("month", "ndviid", "ndvi"))
+            d}))}
+
     message("Writing satellite data")
     d}
 get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
