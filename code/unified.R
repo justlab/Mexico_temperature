@@ -232,6 +232,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
         d = d[0 < rowSums(!is.na(d[, ..temp.ground.vars]))]}
 
     message("Reselecting variables")
+    max.yday = 365 + lubridate::leap_year(the.year)
     d = d[, .(
         lstid, yday,
         stn,
@@ -243,8 +244,8 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
         ndvi = (terra.ndvi + aqua.ndvi)/2,
         elevation,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
-        time.sin = sinpi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)),
-        time.cos = cospi(2 * (yday - 1)/(max(yday, na.rm = T) - 1)))]
+        time.sin = sinpi(2 * (yday - 1)/(max.yday - 1)),
+        time.cos = cospi(2 * (yday - 1)/(max.yday - 1)))]
 
     if (nonmissing.ground.temp)
       # Split the ground stations into cross-validation folds. This
