@@ -209,6 +209,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
             sv = get.satellite.data(satellite, "vegetation", the.year)
             message("Merging in ", satellite, " NDVI")
             d = merge(d, sv, by = c("ndviid", "month"), all.x = T)
+            stopifnot(!anyNA(d$ndvi))
             setnames(d, "ndvi", paste0(satellite, ".ndvi"))}
         d})
 
