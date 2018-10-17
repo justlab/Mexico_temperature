@@ -23,12 +23,24 @@ temp.ground.vars = c(
 nontemp.ground.vars = c(
     "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
 
+encode.lonlat = function(longitude, latitude)
+  # Encodes longitude and latitude into a single nonnegative integer,
+  # which should be unique for `fullgrid[,encode.lonlat(long_lst, lat_lst)]`.
+  # Rounding at 3 digits is necessary because the same rounding
+  # was already done for `fullgrid`.
+    round(1e3 * (longitude + 180)) * 1e5 + round(1e3 * latitude + 90)
+
 get.nonsatellite.data = function()
    {# Load the clipped grid of the Mexico study area.
     message("Loading spatial grid")
     fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
-    fullgrid[, lstid := paste0(long_lst, "-", lat_lst)]
-    fullgrid[, ndviid := paste0(long_ndvi, "-", lat_ndvi)]
+    fullgrid[, lstid := encode.lonlat(long_lst, lat_lst)]
+    # `lstid`s should all be distinct.
+    stopifnot(!anyDuplicated(fullgrid$lstid))
+    fullgrid[, ndviid := encode.lonlat(long_ndvi, lat_ndvi)]
+    # Each's long-lat pair's `ndviid` should be distinct.
+    stopifnot(!anyDuplicated(
+        fullgrid[, head(.SD, 1), by = .(long_ndvi, lat_ndvi)][, ndviid]))
     fullgrid = fullgrid[, .(
         lstid, long_lst, lat_lst,
         ndviid, long_ndvi, lat_ndvi,
@@ -38,8 +50,6 @@ get.nonsatellite.data = function()
     # Load the data from ground stations.
     message("Loading ground data")
     ground = readRDS("data/work/all_stations_final.rds")
-    # Remove the `lstid` column, because it isn't formatted consistently
-    # with the satellite data.
     ground[, lstid := NULL]
     setnames(ground,
         c("low.temp", "temp.mean", "hi.temp"),
@@ -74,7 +84,7 @@ get.nonsatellite.data = function()
         nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
 
     # Create an environment `stns.by.dist` such that
-    # `stns.by.dist[[lstid]]` gives a vector of all stations
+    # `stns.by.dist[[as.character(lstid)]]` gives a vector of all stations
     # ordered by distance from `lstid`, with the closest first.
     message("Populating stns.by.dist")
     fullgrid.pos = as.matrix(
@@ -86,7 +96,7 @@ get.nonsatellite.data = function()
         k = length(unique(ground$stn)))$nn.index
     neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
     stns.by.dist = new.env(parent = emptyenv())
-    lstids = fullgrid$lstid
+    lstids = as.character(fullgrid$lstid)
     for (i in seq_along(lstids))
         stns.by.dist[[lstids[i]]] = neighbors[i,]
 
@@ -103,6 +113,8 @@ get.satellite.data = function(satellite, product, the.year)
     if (product == "temperature")
        {d = as.data.table(readRDS(file.path(satellite.temperature.dir,
             sprintf("%s11A1_%d.rds", satellite.code, the.year))))
+        message("Setting new lstids")
+        d[, lstid := encode.lonlat(long_lst, lat_lst)]
         message("Subsetting satellite data")
         d = d[
             (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
@@ -129,7 +141,7 @@ get.satellite.data = function(satellite, product, the.year)
                 "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
 
             setnames(d, "band1", "ndvi")
-            d[, ndviid := paste0(round(x, 3), "-", round(y, 3))]
+            d[, ndviid := encode.lonlat(x, y)]
             d[, `:=`(x = NULL, y = NULL)]
             d = d[!is.na(ndvi) & ndviid %in% fullgrid$ndviid]
 
@@ -170,7 +182,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
         yday = yday(date),
         month = month(date),
         date = NULL,
-        ndviid = fullgrid[lstid, ndviid])]
+        ndviid = fullgrid[.(d$lstid), ndviid])]
 
     message("Merging in ground measurements")
     # This step can increase the number of rows in `d` a bit because
@@ -280,7 +292,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
    {d = copy(d.orig)
     folds = d$fold
     ydays = d$yday
-    lstids = d$lstid
+    lstids = as.character(d$lstid)
     ustn = as.character(unique(d.orig$stn))
 
     for (vname in nontemp.ground.vars)
