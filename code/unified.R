@@ -19,6 +19,8 @@ plan(multiprocess)
 n.folds = 10
 available.years = 2003 : 2015
 
+satellite.codes = c(terra = "MOD", aqua = "MYD")
+
 temp.ground.vars = c(
     "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
 nontemp.ground.vars = c(
@@ -109,14 +111,13 @@ get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
     stopifnot(product %in% c("temperature", "vegetation"))
     message("Loading satellite data: ", paste(satellite, product, the.year))
-    satellite.code = c(terra = "MOD", aqua = "MYD")[satellite]
 
     if (product == "temperature")
       # Read from fst files produced by
       # https://gitlab.com/ihough/modis_lst_hdf_to_fst
        {d = read_fst(
             file.path(satellite.temperature.dir,
-                sprintf("%s11A1_%d.fst", satellite.code, the.year)),
+                sprintf("%s11A1_%d.fst", satellite.codes[satellite], the.year)),
             columns = c("day", "lon", "lat", "LST_Day_1km", "LST_Night_1km"),
             as.data.table = T)
         setnames(d,
@@ -131,31 +132,18 @@ get.satellite.data = function(satellite, product, the.year)
 
     else
       # For vegetation, read from the original HDFs.
-       {suppressPackageStartupMessages(
-           {library(raster)
-            library(rgdal)
-            library(gdalUtils)})
-        month.daynums = c(
+       {month.daynums = c(
             '001', '032', '060', '091', '121', '152',
             '182', '213', '244', '274', '305', '335')
 
-        files = grep(fixed = T, value = T,
-            paste0(satellite.code, "13A3.A", the.year),
-            dir(satellite.vegetation.dir, full.names = T))
-        d = rbindlist(future_lapply(files, function(fname)
-           {d = raster(readGDAL(silent = T, paste0(
-                "HDF4_EOS:EOS_GRID:",
-                fname,
-                ":MOD_Grid_monthly_1km_VI:1 km monthly NDVI")))
-            d = as.data.table(spTransform(rasterToPoints(d, spatial = T),
-                "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+        d = rbindlist(future_lapply(vegetation.paths(satellite, the.year), function(fpath)
+           {d = read.vegetation.file(fpath)
 
-            setnames(d, "band1", "ndvi")
             d[, ndviid := encode.lonlat(x, y)]
             d[, `:=`(x = NULL, y = NULL)]
             d = d[!is.na(ndvi) & ndviid %in% fullgrid$ndviid]
 
-            daynum = regmatches(fname, regexec("\\.A\\d{4}(\\d{3})", fname))[[1]][2]
+            daynum = regmatches(fpath, regexec("\\.A\\d{4}(\\d{3})", fpath))[[1]][2]
             d$month = which(
                 month.daynums == daynum |
                 month.daynums == sprintf('%03d', as.integer(daynum) - 1))
@@ -166,6 +154,29 @@ get.satellite.data = function(satellite, product, the.year)
     message("Writing satellite data")
     d}
 get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
+
+vegetation.paths = function(satellite, the.year)
+    grep(fixed = T, value = T,
+        paste0(satellite.codes[satellite], "13A3.A", the.year),
+        dir(satellite.vegetation.dir, full.names = T))
+
+read.vegetation.file = function(fpath, full.grid = F)
+   {suppressPackageStartupMessages(
+       {library(raster)
+        library(rgdal)
+        library(gdalUtils)})
+    subdataset = paste0(
+        "HDF4_EOS:EOS_GRID:",
+        fpath,
+        ":MOD_Grid_monthly_1km_VI:1 km monthly NDVI")
+    d = raster(readGDAL(subdataset, silent = T))
+    if (full.grid)
+        d[,] = 1
+    d = as.data.table(spTransform(rasterToPoints(d, spatial = T),
+        "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+    if (!full.grid)
+        setnames(d, "band1", "ndvi")
+    d}
 
 lstid.sets = list()
 
