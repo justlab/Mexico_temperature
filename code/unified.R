@@ -31,7 +31,7 @@ satellite.codes = c(terra = "MOD", aqua = "MYD")
 temp.ground.vars = c(
     "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
 nontemp.ground.vars = c(
-    "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
+    "wind.speed.mean")
 
 get.nonsatellite.data = function()
    {# Load the master grid.
@@ -242,10 +242,6 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
         by = "mrow",
         all.x = T)
 
-    # Remove a high correlation by mean-centering.
-    message("Decorrelating")
-    d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
-
     combine.sat = function(terra, aqua)
         ifelse(is.na(terra),
             ifelse(is.na(aqua),
@@ -282,7 +278,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
         satellite.temp.night, satellite.temp.night.imputed,
         ndvi = (terra.ndvi + aqua.ndvi)/2,
         elevation,
-        r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
+        wind.speed.mean,
         time.sin = sinpi(2 * (yday - 1)/(max.yday - 1)),
         time.cos = cospi(2 * (yday - 1)/(max.yday - 1)))]
 
@@ -369,7 +365,7 @@ train.model = function(dataset)
         ndvi +
         time.sin + time.cos +
         elevation +
-        r.humidity.mean + bar.mean + rain.mean + wind.speed.mean)
+        wind.speed.mean)
     preproc = preProcess(method = c("center", "scale"),
         dataset[,
             setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
