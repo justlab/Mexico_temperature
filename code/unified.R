@@ -246,9 +246,21 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     message("Decorrelating")
     d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
 
+    combine.sat = function(terra, aqua)
+        ifelse(is.na(terra),
+            ifelse(is.na(aqua),
+                NA,
+                aqua),
+            ifelse(is.na(aqua),
+                terra,
+                (terra + aqua)/2))
+    d[, `:=`(
+        satellite.temp.day = combine.sat(terra.temp.day, aqua.temp.day),
+        satellite.temp.night = combine.sat(terra.temp.night, aqua.temp.night))]
+
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
-    for (vname in grep("^(aqua|terra).temp\\.", colnames(d), value = T))
+    for (vname in c("satellite.temp.day", "satellite.temp.night"))
        {message("Interpolating ", vname)
         d[, paste0(vname, ".imputed") := is.na(get(vname))]
         d[, (vname) := approx(
@@ -266,10 +278,8 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
         mrow, yday,
         stn,
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
-        terra.temp.day, terra.temp.day.imputed,
-        terra.temp.night, terra.temp.night.imputed,
-        aqua.temp.day, aqua.temp.day.imputed,
-        aqua.temp.night, aqua.temp.night.imputed,
+        satellite.temp.day, satellite.temp.day.imputed,
+        satellite.temp.night, satellite.temp.night.imputed,
         ndvi = (terra.ndvi + aqua.ndvi)/2,
         elevation,
         r.humidity.mean, bar.mean, rain.mean, wind.speed.mean,
@@ -354,10 +364,8 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
 
 train.model = function(dataset)
    {fe = (~
-        terra.temp.day * terra.temp.day.imputed +
-        terra.temp.night * terra.temp.night.imputed +
-        aqua.temp.day * aqua.temp.day.imputed +
-        aqua.temp.night * aqua.temp.night.imputed +
+        satellite.temp.day + satellite.temp.day.imputed +
+        satellite.temp.night + satellite.temp.night.imputed +
         ndvi +
         time.sin + time.cos +
         elevation +
