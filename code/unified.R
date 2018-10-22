@@ -18,6 +18,13 @@ plan(multiprocess)
 
 n.folds = 10
 available.years = 2003 : 2015
+master.grid.year = 2012L
+  # This needs to be a year for which we have satellite vegetation
+  # data, but the exact value shouldn't matter much.
+
+study.area = list(
+  lon.min = -101, lon.max = -96,
+  lat.min = 17, lat.max = 22)
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 
@@ -26,34 +33,29 @@ temp.ground.vars = c(
 nontemp.ground.vars = c(
     "r.humidity.mean", "bar.mean", "wind.speed.mean", "rain.mean")
 
-encode.lonlat = function(longitude, latitude)
-  # Encodes longitude and latitude into a single nonnegative integer,
-  # which should be unique for `fullgrid[,encode.lonlat(long_lst, lat_lst)]`.
-  # Rounding at 3 digits is necessary because the same rounding
-  # was already done for `fullgrid`.
-    round(1e3 * (longitude + 180)) * 1e5 + round(1e3 * latitude + 90)
-
 get.nonsatellite.data = function()
-   {# Load the clipped grid of the Mexico study area.
-    message("Loading spatial grid")
+   {# Load the master grid.
+    message("Loading master grid")
+    master.grid <<- rbindlist(Map(read.vegetation.file, full.grid = T,
+        grep(value = T, "\\.A\\d{4}001\\.[^/]+$",
+            vegetation.paths("aqua", master.grid.year))))
+    master.grid <<- master.grid[
+      in.study.area(x, y),
+      .(lon = x, lat = y)]
+    stopifnot(nrow(unique(master.grid)) == nrow(master.grid))
+
+    # Load spatial data.
+    message("Loading spatial data")
     fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
-    fullgrid[, lstid := encode.lonlat(long_lst, lat_lst)]
-    # `lstid`s should all be distinct.
-    stopifnot(!anyDuplicated(fullgrid$lstid))
-    fullgrid[, ndviid := encode.lonlat(long_ndvi, lat_ndvi)]
-    # Each's long-lat pair's `ndviid` should be distinct.
-    stopifnot(!anyDuplicated(
-        fullgrid[, head(.SD, 1), by = .(long_ndvi, lat_ndvi)][, ndviid]))
-    fullgrid = fullgrid[, .(
-        lstid, long_lst, lat_lst,
-        ndviid, long_ndvi, lat_ndvi,
-        elevation)]
-    setkey(fullgrid, lstid)
+    set.mrows(fullgrid, "long_lst", "lat_lst")
+    # `mrow`s should all be distinct.
+    stopifnot(!anyDuplicated(fullgrid$mrow))
+    fullgrid = fullgrid[, .(mrow, long_lst, lat_lst, elevation)]
+    setkey(fullgrid, mrow)
 
     # Load the data from ground stations.
     message("Loading ground data")
     ground = readRDS("data/work/all_stations_final.rds")
-    ground[, lstid := NULL]
     setnames(ground,
         c("low.temp", "temp.mean", "hi.temp"),
         temp.ground.vars)
@@ -69,43 +71,36 @@ get.nonsatellite.data = function()
         ground[, nrow(unique(.SD)), by = stn,
            .SDcols = c("latitude", "longitude")]$V1
         == 1))
+    set.mrows(ground, "longitude", "latitude")
 
-    # Find the nearest `lstid` and `ndviid` (i.e., LST ID and NDVI
-    # ID) for each station.
-    message("Matching up spatial grid with ground data")
-    nearest.id = function(longvar, latvar, idvar)
-       {ground.station.pos = as.matrix(unique(ground[, .(longitude, latitude)]))
-        fullgrid.pos = as.matrix(fullgrid[, c(longvar, latvar), with = F])
-        neighbors = as.data.table(get.knnx(
-            fullgrid.pos, ground.station.pos, k = 1))
-        neighbors[, stn := unique(ground$stn)]
-        neighbors[[idvar]] = fullgrid[neighbors$nn.index, idvar, with = F][[1]]
-        neighbors[, c("stn", idvar), with = F]}
-    ground = merge(ground, by = "stn",
-        nearest.id("long_lst", "lat_lst", "lstid"))
-    ground = merge(ground, by = "stn",
-        nearest.id("long_ndvi", "lat_ndvi", "ndviid"))
-
-    # Create an environment `stns.by.dist` such that
-    # `stns.by.dist[[as.character(lstid)]]` gives a vector of all stations
-    # ordered by distance from `lstid`, with the closest first.
+    # Create a matrix `stns.by.dist` such that
+    # `stns.by.dist[mrow,]` gives a vector of all stations
+    # ordered by distance from `mrow`, with the closest first.
     message("Populating stns.by.dist")
-    fullgrid.pos = as.matrix(
-        fullgrid[, .(long_lst, lat_lst)])
-    ground.station.pos = as.matrix(unique(
-        ground[order(stn), .(longitude, latitude)]))
-    neighbors = get.knnx(
-        ground.station.pos, fullgrid.pos,
+    stns.by.dist = get.knnx(
+        as.matrix(unique(
+            ground[order(stn), .(longitude, latitude)])),
+        master.grid,
         k = length(unique(ground$stn)))$nn.index
-    neighbors = apply(neighbors, 2, function(v) sort(unique(ground$stn))[v])
-    stns.by.dist = new.env(parent = emptyenv())
-    lstids = as.character(fullgrid$lstid)
-    for (i in seq_along(lstids))
-        stns.by.dist[[lstids[i]]] = neighbors[i,]
+    stns.by.dist = apply(stns.by.dist, 2, function(v)
+        sort(unique(ground$stn))[v])
 
-    list(fullgrid, ground, stns.by.dist)}
+    list(master.grid, fullgrid, ground, stns.by.dist)}
 get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
-c(fullgrid, ground, stns.by.dist) %<-% get.nonsatellite.data()
+
+in.study.area = function(lon, lat)
+    with(study.area,
+        lon >= lon.min & lon <= lon.max &
+        lat >= lat.min & lat <= lat.max)
+
+set.mrows = function(d, longitude.col, latitude.col)
+  # Adds to the given data table a column `mrow` that specifies
+  # corresponding row of `master.grid`.
+   {x = d[[longitude.col]]
+    y = d[[latitude.col]]
+    stopifnot(all(in.study.area(x, y)))
+    set(d, j = "mrow", value =
+        get.knnx(master.grid, cbind(x, y), k = 1)$nn.index[,1])}
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
@@ -123,12 +118,12 @@ get.satellite.data = function(satellite, product, the.year)
         setnames(d,
             c("LST_Day_1km", "LST_Night_1km"),
             c("temp.day", "temp.night"))
-        message("Setting lstids")
-        d[, lstid := encode.lonlat(lon, lat)]
-        message("Subsetting satellite data")
-        d = d[
-            (!is.na(temp.day) | !is.na(temp.night)) & lstid %in% fullgrid$lstid,
-            .(lstid, yday = yday(day), temp.day, temp.night)]}
+        message("Subsetting temperatures")
+        d = d[(!is.na(temp.day) | !is.na(temp.night)) &
+            in.study.area(lon, lat)]
+        message("Setting mrows")
+        set.mrows(d, "lon", "lat")
+        d = d[, .(mrow, yday = yday(day), temp.day, temp.night)]}
 
     else
       # For vegetation, read from the original HDFs.
@@ -139,16 +134,16 @@ get.satellite.data = function(satellite, product, the.year)
         d = rbindlist(future_lapply(vegetation.paths(satellite, the.year), function(fpath)
            {d = read.vegetation.file(fpath)
 
-            d[, ndviid := encode.lonlat(x, y)]
+            d = d[!is.na(ndvi) & in.study.area(x, y)]
+            set.mrows(d, "x", "y")
             d[, `:=`(x = NULL, y = NULL)]
-            d = d[!is.na(ndvi) & ndviid %in% fullgrid$ndviid]
 
             daynum = regmatches(fpath, regexec("\\.A\\d{4}(\\d{3})", fpath))[[1]][2]
             d$month = which(
                 month.daynums == daynum |
                 month.daynums == sprintf('%03d', as.integer(daynum) - 1))
 
-            setcolorder(d, c("month", "ndviid", "ndvi"))
+            setcolorder(d, c("mrow", "month", "ndvi"))
             d}))}
 
     message("Writing satellite data")
@@ -185,21 +180,21 @@ read.vegetation.file = function(fpath, full.grid = F)
         d$ndvi = d$ndvi / scale.factor^2}
     d}
 
-lstid.sets = list()
+mrow.sets = list()
 
-model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
-   {if (!xor(!is.null(lstid.set), nonmissing.ground.temp))
-        stop("Either enable `nonmissing.ground.temp` to get all points with non-missing ground temperatures, or choose a `lstid.set` to get all days for the selected `lstid`s.")
+model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
+   {if (!xor(!is.null(mrow.set), nonmissing.ground.temp))
+        stop("Either enable `nonmissing.ground.temp` to get all points with non-missing ground temperatures, or choose an `mrow.set` to get all days for the selected `mrow`s.")
 
     message("Merging data sources: ",
-        the.year, " ", lstid.set, " ", nonmissing.ground.temp)
+        the.year, " ", mrow.set, " ", nonmissing.ground.temp)
 
     message("Constructing grid")
     d = CJ(sorted = F,
-        lstid = (if (nonmissing.ground.temp)
-                sort(ground[year(date) == the.year, unique(lstid)])
+        mrow = (if (nonmissing.ground.temp)
+                sort(ground[year(date) == the.year, unique(mrow)])
             else
-                lstid.sets[[lstid.set]]),
+                mrow.sets[[mrow.set]]),
         date = seq(
             as.Date(paste0(the.year, "-01-01")),
             as.Date(paste0(the.year, "-12-31")),
@@ -209,20 +204,19 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
     d[, `:=`(
         yday = yday(date),
         month = month(date),
-        date = NULL,
-        ndviid = fullgrid[.(d$lstid), ndviid])]
+        date = NULL)]
 
     message("Merging in ground measurements")
     # This step can increase the number of rows in `d` a bit because
-    # there can more than one ground station per `lstid`.
+    # there can more than one ground station per `mrow`.
     d = merge(d,
         ground[
             year(date) == the.year,
             c(
-                mget(c("stn", "lstid")),
+                mget(c("stn", "mrow")),
                 .(yday = yday(date)),
                 mget(temp.ground.vars), mget(nontemp.ground.vars))],
-        by = c("lstid", "yday"),
+        by = c("mrow", "yday"),
         all.x = T)
 
     # Merge in satellite data.
@@ -230,13 +224,13 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
        {for (satellite in c("terra", "aqua"))
            {st = get.satellite.data(satellite, "temperature", the.year)
             message("Merging in ", satellite, " temperature")
-            d = merge(d, st, by = c("lstid", "yday"), all.x = T)
+            d = merge(d, st, by = c("mrow", "yday"), all.x = T)
             setnames(d,
                 c("temp.day", "temp.night"),
                 paste0(satellite, c(".temp.day", ".temp.night")))
             sv = get.satellite.data(satellite, "vegetation", the.year)
             message("Merging in ", satellite, " NDVI")
-            d = merge(d, sv, by = c("ndviid", "month"), all.x = T)
+            d = merge(d, sv, by = c("mrow", "month"), all.x = T)
             stopifnot(!anyNA(d$ndvi))
             setnames(d, "ndvi", paste0(satellite, ".ndvi"))}
         d})
@@ -244,8 +238,8 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
     message("Merging in land-use data")
     d = merge(d,
         fullgrid[, .(
-            lstid, elevation)],
-        by = "lstid",
+            mrow, elevation)],
+        by = "mrow",
         all.x = T)
 
     # Remove a high correlation by mean-centering.
@@ -266,7 +260,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
         d[, (vname) := approx(
                 x = yday, y = get(vname), xout = yday,
                 method = "linear", rule = 2)$y,
-            by = lstid]}
+            by = mrow]}
 
     if (nonmissing.ground.temp)
        {message("Dropping")
@@ -275,7 +269,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
     message("Reselecting variables")
     max.yday = 365 + lubridate::leap_year(the.year)
     d = d[, .(
-        lstid, yday,
+        mrow, yday,
         stn,
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
         terra.temp.day, terra.temp.day.imputed,
@@ -321,7 +315,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
    {d = copy(d.orig)
     folds = d$fold
     ydays = d$yday
-    lstids = as.character(d$lstid)
+    mrows = d$mrow
     ustn = as.character(unique(d.orig$stn))
 
     for (vname in nontemp.ground.vars)
@@ -348,7 +342,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
                     is.na(column[ri]))
                {found = F
                 for (the.yday in ydays[ri] : 1)
-                   {for (the.stn in as.character(stns.by.dist[[lstids[ri]]]))
+                   {for (the.stn in as.character(stns.by.dist[mrows[ri],]))
                        {if (exists(the.stn, other.vs)
                                 && (is.null(fold.i) || other.folds[[the.stn]][the.yday] != fold.i)
                                 && !is.na(other.vs[[the.stn]][the.yday]))
@@ -480,65 +474,64 @@ summarize.cv.results = function(multirun.output)
                     by = .(year, dv, season)]
                 [, .("Moran p" = V1)]))}
 
-dedupe.lstid.days = function(d)
-  # There are some `lstids` that have more than one
+dedupe.mrow.days = function(d)
+  # There are some `mrows` that have more than one
   # station, but we want to look up some data frames by
-  # `lstid`. So just keep the first station per `lstid` and
+  # `mrow`. So just keep the first station per `mrow` and
   # day.
-    d[, head(.SD, 1), by = .(lstid, yday)]
+    d[, head(.SD, 1), by = .(mrow, yday)]
 
 predict.temps = function(file)
   # Predict a low, mean, and high temperature for each location
   # and date.
    {orig = readRDS(file)
-    d.query = with(orig, data.table(date = day, long = long48, lat = lat48))
+    d.query = with(orig, data.table(date = day, lon = long48, lat = lat48))
 
-    # Find an appropriate `lstid` for each location.
-    query.pos = as.matrix(d.query[, .(long, lat)])
-    fullgrid.pos = as.matrix(fullgrid[, .(long_lst, lat_lst)])
-    neighbors = as.data.table(get.knnx(
-        fullgrid.pos, query.pos, k = 1))
-    d.query$lstid = fullgrid[neighbors$nn.index, lstid]
+    message("Setting mrows")
+    set.mrows(d.query, "lon", "lat")
 
     f = function(slice)
        {the.year = slice[1, year(date)]
 
         # Construct `d.model` to contain to have a row for each time
-        # (`yday`) and place (`lstid`) that either:
+        # (`yday`) and place (`mrow`) that either:
         # - has a non-missing ground temperature (used for training)
         # - is present in `slice` (used for prediction)
-        lstid.sets[[paste(file, the.year)]] <<- sort(unique(slice$lstid))
+        mrow.sets[[paste(file, the.year)]] <<- sort(unique(slice$mrow))
         d.model = model.dataset(the.year, nonmissing.ground.temp = T)
         d.model = rbind(d.model,
-            model.dataset(the.year, lstid.set = paste(file, the.year))[
-                paste(lstid, yday) %in% slice[, paste(lstid, yday(date))] &
-                !(paste(lstid, yday) %in% d.model[, paste(lstid, yday)])])
+            model.dataset(the.year, mrow.set = paste(file, the.year))[
+                paste(mrow, yday) %in% slice[, paste(mrow, yday(date))] &
+                !(paste(mrow, yday) %in% d.model[, paste(mrow, yday)])])
+        d.model[, ground.temp := NA_real_]
         setkey(d.model, stn, yday)
         message("Imputing non-temperature ground variables for ", the.year)
         d.model = impute.nontemp.ground.vars(d.model, fold.i = NULL)
-        setkey(d.model, lstid, yday, stn)
+        setkey(d.model, mrow, yday, stn)
 
-        # If for a given `lstid` and day we have an actual ground
+        # If for a given `mrow` and day we have an actual ground
         # measurement, we'll use that instead of the model prediction.
         gr = ground[year(date) == the.year]
         gr[, yday := yday(date)]
-        gr = dedupe.lstid.days(gr)
-        setkey(gr, lstid, yday)
+        gr = dedupe.mrow.days(gr)
+        setkey(gr, mrow, yday)
 
         sapply(simplify = F, temp.ground.vars, function(dvname)
            {message("Predicting ", dvname)
             d.model[, ground.temp := get(dvname)]
             f.pred = train.model(d.model[!is.na(ground.temp)])
-            pred = f.pred(dedupe.lstid.days(d.model)[
-                .(slice$lstid, yday(slice$date))])
-            observed = gr[.(slice$lstid, yday(slice$date)), get(dvname)]
+            pred = f.pred(dedupe.mrow.days(d.model)[
+                .(slice$mrow, yday(slice$date))])
+            observed = gr[.(slice$mrow, yday(slice$date)), get(dvname)]
             ifelse(is.na(observed), pred, observed)})}
     d.query[, (temp.ground.vars) := f(.SD),
        by = year(date),
-       .SDcols = c("date", "lstid")]
+       .SDcols = c("date", "mrow")]
 
     d.query[, .(
         temperature.lo = ground.temp.lo,
         temperature.mean = ground.temp.mean,
         temperature.hi = ground.temp.hi)]}
 predict.temps = pairmemo(predict.temps, pairmemo.dir, mem = T, fst = T)
+
+c(master.grid, fullgrid, ground, stns.by.dist) %<-% get.nonsatellite.data()
