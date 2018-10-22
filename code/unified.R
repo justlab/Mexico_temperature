@@ -175,7 +175,14 @@ read.vegetation.file = function(fpath, full.grid = F)
     d = as.data.table(spTransform(rasterToPoints(d, spatial = T),
         "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
     if (!full.grid)
-        setnames(d, "band1", "ndvi")
+       {setnames(d, "band1", "ndvi")
+        # The scale factor has already been applied, but by
+        # multiplication instead of division, so divide by the
+        # square.
+        gi = paste(gdalinfo(subdataset), collapse = " ")
+        scale.factor = as.numeric(regmatches(gi,
+            regexec(" scale_factor=(\\d+)", gi))[[1]][2])
+        d$ndvi = d$ndvi / scale.factor^2}
     d}
 
 lstid.sets = list()
