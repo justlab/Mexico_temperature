@@ -246,12 +246,6 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     message("Decorrelating")
     d[, bar.mean := bar.mean - mean(bar.mean, na.rm = T), by = elevation]
 
-    if (nonmissing.ground.temp)
-       {message("Dropping")
-        d = d[0 < rowSums(!is.na(d[,
-            grep("\\.temp\\.", colnames(d), val = T),
-            with = F]))]}
-
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
     for (vname in grep("^(aqua|terra).temp\\.", colnames(d), value = T))
