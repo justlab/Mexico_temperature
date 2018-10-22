@@ -1,5 +1,6 @@
 suppressPackageStartupMessages(
    {library(data.table)
+    library(fst)
     library(FNN)
     library(lme4)
     library(ape)
@@ -10,7 +11,7 @@ suppressPackageStartupMessages(
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
-satellite.temperature.dir = "data/RAW/MODIS.AQUA.TERRA.LST.NDVI/stage2"
+satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
 
 plan(multiprocess)
@@ -111,16 +112,25 @@ get.satellite.data = function(satellite, product, the.year)
     satellite.code = c(terra = "MOD", aqua = "MYD")[satellite]
 
     if (product == "temperature")
-       {d = as.data.table(readRDS(file.path(satellite.temperature.dir,
-            sprintf("%s11A1_%d.rds", satellite.code, the.year))))
-        message("Setting new lstids")
-        d[, lstid := encode.lonlat(long_lst, lat_lst)]
+      # Read from fst files produced by
+      # https://gitlab.com/ihough/modis_lst_hdf_to_fst
+       {d = read_fst(
+            file.path(satellite.temperature.dir,
+                sprintf("%s11A1_%d.fst", satellite.code, the.year)),
+            columns = c("day", "lon", "lat", "LST_Day_1km", "LST_Night_1km"),
+            as.data.table = T)
+        setnames(d,
+            c("LST_Day_1km", "LST_Night_1km"),
+            c("temp.day", "temp.night"))
+        message("Setting lstids")
+        d[, lstid := encode.lonlat(lon, lat)]
         message("Subsetting satellite data")
         d = d[
-            (!is.na(d.tempc) | !is.na(n.tempc)) & lstid %in% fullgrid$lstid,
-            .(lstid, yday = yday(day), d.tempc, n.tempc)]}
+            (!is.na(temp.day) | !is.na(temp.night)) & lstid %in% fullgrid$lstid,
+            .(lstid, yday = yday(day), temp.day, temp.night)]}
 
     else
+      # For vegetation, read from the original HDFs.
        {suppressPackageStartupMessages(
            {library(raster)
             library(rgdal)
@@ -204,7 +214,7 @@ model.dataset = function(the.year, lstid.set = NULL, nonmissing.ground.temp = F)
             message("Merging in ", satellite, " temperature")
             d = merge(d, st, by = c("lstid", "yday"), all.x = T)
             setnames(d,
-                c("d.tempc", "n.tempc"),
+                c("temp.day", "temp.night"),
                 paste0(satellite, c(".temp.day", ".temp.night")))
             sv = get.satellite.data(satellite, "vegetation", the.year)
             message("Merging in ", satellite, " NDVI")
