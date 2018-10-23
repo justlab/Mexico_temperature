@@ -457,6 +457,13 @@ summarize.cv.results = function(multirun.output)
                     by = .(year, dv, yday)]
                 [, mean(p < .05), by = .(year, dv)]
                 [, .("Moran ps < .05" = V1)]),
+        by.imp =
+            d
+                [, eval(j1), keyby = .(year, dv,
+                    imp.d = satellite.temp.day.imputed,
+                    imp.n = satellite.temp.night.imputed)]
+                [, .(year, dv, imp.d, imp.n,
+                    N, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = cbind(
             d
                 [, eval(j1), keyby = .(year, dv, season)]
