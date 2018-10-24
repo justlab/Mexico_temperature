@@ -416,10 +416,13 @@ run.cv = function(the.year, dvname)
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
     message("run.cv: ", the.year, " ", dvname)
 
+    bar = txtProgressBar(min = 0, max = n.folds, style = 3)
     for (fold.i in 1 : n.folds)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
         f.pred = train.model(d[fold != fold.i])
-        d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]}
+        d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]
+        setTxtProgressBar(bar, fold.i)}
+    close(bar)
 
     cbind(d.master, year = the.year, dv = dvname)}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
