@@ -1,3 +1,30 @@
+# Use mixed-effects regression models to predict ground readings
+# of temperature from several weather stations around Mexico City
+# using satellite temperature measurements, satellite vegetation
+# measurements, and some other variables. There are three DVs:
+# daily high temperatures (according to the ground weather
+# stations), daily lows, and daily means. A separate model is fit
+# per year and DV.
+#
+# --- Usage ---
+#
+# Examine cross-validated predictive accuracy for one year and DV:
+#
+#     summarize.cv.results(run.cv(2012L, "ground.temp.mean"))
+#
+# For all DVs for a given year:
+#
+#     summarize.cv.results(multi.run.cv(2012L))
+#
+# For all DVs and all years:
+#
+#     summarize.cv.results(multi.run.cv(available.years))
+#
+# Get predictions of the lows, highs, and mean temperature for
+# new positions and days in the study area:
+#
+#     predict.temps(FILENAME)
+
 suppressPackageStartupMessages(
    {library(data.table)
     library(fst)
