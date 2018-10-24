@@ -30,6 +30,7 @@ suppressPackageStartupMessages(
     library(fst)
     library(FNN)
     library(lme4)
+    library(optimx)
     library(ape)
     library(future.apply)
     library(zeallot)
@@ -397,8 +398,12 @@ train.model = function(dataset)
         dataset[,
             setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
             with = F])
-    m = lmer(data = predict(preproc, dataset), update.formula(fe,
-        ground.temp ~ . + (1 | yday)))
+    m = lmer(
+        data = predict(preproc, dataset),
+        update.formula(fe, ground.temp ~ . +
+            (1 + satellite.temp.day + satellite.temp.night | yday)),
+        control = lmerControl(optimizer = "optimx",
+            optCtrl = list(method = "nlminb")))
     function(newdata)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
