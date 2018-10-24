@@ -2,7 +2,9 @@ suppressPackageStartupMessages(
    {library(data.table)
     library(fst)
     library(FNN)
-    library(lme4)
+    library(autoxgboost)
+    library(ParamHelpers)
+    library(mlr)
     library(ape)
     library(future.apply)
     library(zeallot)
@@ -359,22 +361,44 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
     d}
 
 train.model = function(dataset)
-   {fe = (~
-        satellite.temp.day + satellite.temp.day.imputed +
-        satellite.temp.night + satellite.temp.night.imputed +
-        ndvi +
-        time.sin + time.cos +
-        elevation +
-        wind.speed.mean)
-    preproc = preProcess(method = c("center", "scale"),
-        dataset[,
-            setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
-            with = F])
-    m = lmer(data = predict(preproc, dataset), update.formula(fe,
-        ground.temp ~ . + (1 | yday)))
+   {m = autoxgboost(
+        makeRegrTask(data = autoxgboost.data(dataset), target = "ground.temp"),
+        measure = rmse,
+        par.set = autoxgbparset.dart,
+        time.budget = 120,
+        nthread = 10)
     function(newdata)
-       predict(m, newdata = predict(preproc, newdata),
-           allow.new.levels = T)}
+        predict(m, newdata = autoxgboost.data(newdata))$data$response}
+
+autoxgboost.data = function(dataset)
+   {dataset = dataset[, .(
+        ground.temp,
+        satellite.temp.day, satellite.temp.day.imputed,
+        satellite.temp.night, satellite.temp.night.imputed,
+        ndvi,
+        yday, time.sin, time.cos,
+        elevation,
+        wind.speed.mean)]
+    setDF(dataset)
+    for (v in c("satellite.temp.day.imputed", "satellite.temp.night.imputed"))
+        dataset[[v]] = as.numeric(dataset[[v]])
+    dataset}
+
+autoxgbparset.dart = makeParamSet(
+    makeNumericParam("eta", lower = 0.01, upper = 0.2),
+    makeNumericParam("gamma", lower = -7, upper = 6, trafo = function(x) 2^x),
+    makeIntegerParam("max_depth", lower = 3, upper = 20),
+    makeNumericParam("colsample_bytree", lower = 0.5, upper = 1),
+    makeNumericParam("colsample_bylevel", lower = 0.5, upper = 1),
+    makeNumericParam("lambda", lower = -10, upper = 10, trafo = function(x) 2^x),
+    makeNumericParam("alpha", lower = -10, upper = 10, trafo = function(x) 2^x),
+    makeNumericParam("subsample", lower = 0.5, upper = 1),
+    makeDiscreteParam("booster", values = "dart"),
+    makeDiscreteParam("sample_type", values = c("uniform", "weighted"), requires = quote(booster == "dart")),
+    makeDiscreteParam("normalize_type", values = c("tree", "forest"), requires = quote(booster == "dart")),
+    makeNumericParam("rate_drop", lower = 0, upper = 1, requires = quote(booster == "dart")),
+    makeNumericParam("skip_drop", lower = 0, upper = 1, requires = quote(booster == "dart")),
+    makeLogicalParam("one_drop", requires = quote(booster == "dart")))
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
