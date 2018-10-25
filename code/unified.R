@@ -398,15 +398,30 @@ train.model = function(dataset)
         dataset[,
             setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
             with = F])
-    m = lmer(
+    m = lmer.alternatives(
         data = predict(preproc, dataset),
-        update.formula(fe, ground.temp ~ . +
+        formula = update.formula(fe, ground.temp ~ . +
             (1 + satellite.temp.day + satellite.temp.night | yday)),
-        control = lmerControl(optimizer = "optimx",
-            optCtrl = list(method = "nlminb")))
+        optimizers = list(
+            list(),
+            list(control = lmerControl(optimizer = "Nelder_Mead")),
+            list(control = lmerControl(optimizer = "optimx",
+                optCtrl = list(method = "L-BFGS-B"))),
+            list(control = lmerControl(optimizer = "optimx",
+                optCtrl = list(method = "nlminb")))))
     function(newdata)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
+
+lmer.alternatives = function(formula, data, optimizers)
+  # Try calling `lmer` with each list of arguments in `optimizers`
+  # and return the model from the first fit that doesn't produce any
+  # warnings.
+   {for (arglist in optimizers)
+        tryCatch(
+            return(do.call(lmer, c(list(formula, data), arglist))),
+            warning = function(w) NULL)
+    stop("All lmer.alternatives failed")}
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
