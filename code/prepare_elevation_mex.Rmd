@@ -1,0 +1,292 @@
+---
+title: "Prepare and Extract Elevation for Mexico City Region"
+author: "Johnathan Rush"
+date: "10/22/2018"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(results='hold')
+```
+
+# Libraries
+
+```{r libraries, message=FALSE}
+library(raster)
+library(sp)
+library(mapview)
+library(gdalUtils)
+library(data.table)
+library(fst)
+```
+
+# Load SRTM 30m
+
+SRTM 30m v3 files were downloaded from http://dwtkns.com/srtm30m/  
+In the future, probably easier to get them from the USGS DAC directly.  
+
+```{r srtm_files}
+srtmpath = "~/qnap_geo/SRTM"
+list.files(srtmpath, pattern = "*.hgt$") # for showing filenames in Rmd without full path
+srtmfiles = list.files(srtmpath, pattern = "*.hgt$", full.names = T) # need full path to open them, though
+```
+
+## Mosaic all tiles for Mexico DF AOI
+
+```{r srtm_mosaic, cache=TRUE}
+t1 = Sys.time()
+rasters = lapply(srtmfiles, raster)
+
+# this weird format courtesy of raster::mosaic help, allows mosaicing a list of rasters
+names(rasters)[1:2] <- c('x', 'y')
+rasters$fun <- mean
+rasters$na.rm <- TRUE
+srtm_mosaic = do.call(mosaic, rasters)
+rm(rasters)
+srtm_mosaic
+t2 = Sys.time() - t1; cat(paste("\nMosaic time:", round(as.numeric(t2), 2), attr(t2, "units")))
+```
+
+## Crop down to rough area of interest
+Coords below reflect what Kodi has been using.  
+Kodi is using [-101, 17, -96, 22]. That covers the extent of the ground station data.  
+Allan used [-101, 18, -98, 20] in GEE.  
+Looking at Google Map, these coords capture the state of Mexico City with a small buffer: [-99.4, 19, -98.8, 19.65].  
+
+```{r aoi_poly}
+coords = matrix(c(-101, 17,
+                  -96, 17,
+                  -96, 22,
+                  -101, 22,
+                  -101, 17),
+                ncol = 2, byrow = TRUE)
+aoi_poly = Polygon(coords)
+aoi_sp = SpatialPolygons(list(Polygons(list(aoi_poly), ID = "a")), proj4string=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"))
+aoi_sp
+```
+
+Perform crop if necessary. We're skipping it this time, since the bounds Kodi is using match boundaries of the input files.    
+```{r crop_mosaic, cache=TRUE}
+#srtm_crop = crop(srtm_mosaic, extent(aoi_sp))
+srtm_crop = srtm_mosaic
+```
+
+## Preview elevation raster
+
+Most mapview previews turned off for now because exported HTML was ~250MB
+```{r preview_cropped, eval=FALSE}
+# reorder basemaps so that OpenStreetmap is first
+mapview(srtm_crop, map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+```
+
+# Prepare Gauss filter
+
+## Determine the matrix size in map units
+
+```{r filter_matrix_size}
+rs = res(srtm_crop)
+paste("resolution:", paste(round(rs,6), collapse = ","))
+d = rs[1] * 1000 / 30 / 2 # resolution, 1000m, div by 30m, div by 2 for radius instead of diameter
+
+# from source code: https://github.com/cran/raster/blob/master/R/focalWeight.R
+nx <- 1 + 2 * floor(d/rs[1]) 
+ny <- 1 + 2 * floor(d/rs[2])
+paste("matrix x dimension will be:", nx)
+paste("matrix y dimension will be:", ny)
+paste("d value:", d)
+```
+
+## Weight matrix using 5x raster cell resolution for sigma
+
+```{r filter_graphic, fig.height=4, fig.width=5, warning=FALSE, results='hold'}
+gf1 <- focalWeight(srtm_crop, c(rs[1]*5,d), "Gauss")
+par(oma=c(0.1,0.1,0.1,3))
+par(mar=c(3,3,2,2))
+plot(raster(gf1))
+paste("sum of weights 5 cells around center:", sum(gf1[12:22,12:22])) 
+paste("sum of weights 6 cells around center:", sum(gf1[11:23,11:23])) 
+paste("sum of weights 7 cells around center:", sum(gf1[10:24,10:24])) 
+paste("sum of weights 8 cells around center:", sum(gf1[9:25,9:25]))   
+```
+
+# Apply Gauss filter
+
+```{r apply_filter, cache=TRUE}
+time_focal = system.time(srtm_focal <- focal(x = srtm_crop, w = gf1))
+time_focal
+srtm_focal
+```
+
+Preview filtered 30m elevation
+```{r preview_filtered, eval=FALSE}
+# reorder basemaps so that OpenStreetmap is first
+mapview(srtm_focal, map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+```
+
+# Get 1km grid
+
+Creating out of two of the NDVI HDFs.  
+
+```{r modis_ndvi_files}
+hdf_path = "/data-belle/Mexico_temperature/ndvi_c006"
+list.files(hdf_path, pattern = "MOD13A3.A2002152") # just for display in Rmd
+hdf_files = list.files(hdf_path, pattern = "MOD13A3.A2002152", full.names = TRUE)
+```
+
+Open the `pixel reliability` subdatasets. The idea was that they would have a value at every pixel, but they don't. We'll fix that later by overwriting their values.  
+
+```{r modis_ndvi_sds}
+# pixel reliability is subdataset 11
+sdf = function(x) {get_subdatasets(x)[[11]]}
+hdf_sds = lapply(hdf_files, sdf)
+```
+
+These two files more than cover the Mexico City AOI  
+```{r modis_points, cache=TRUE}
+hdf_rasters = lapply(hdf_sds, raster)
+hdf_mosaic = mosaic(hdf_rasters[[1]], hdf_rasters[[2]], fun = min)
+hdf_mosaic[] <- rep(1, ncell(hdf_mosaic)) # replace all values. setValues won't work - it will keep the NAs
+hdf_points = rasterToPoints(hdf_mosaic, spatial = TRUE)
+hdf_points = spTransform(hdf_points, CRSobj = CRS("+proj=longlat +ellps=WGS84 +no_defs"))
+hdf_points
+```
+
+## Crop grid to AOI
+```{r modis_points_crop, warning=FALSE}
+grid_aoi = crop(hdf_points, aoi_sp)
+proj4string(grid_aoi)<-proj4string(srtm_focal) # it was missing some attributes, like datum and towgs84
+grid_aoi
+gridDT = as.data.table(grid_aoi)
+```
+
+# Extract elevation values at 1km MODIS grid
+
+We'll use two approaches:  
+1. Extract the nearest filtered 30m value to the 1km centroids. The Gauss filter considered a ~1km square region, weighting the cells closest to the center more strongly.  
+2. Aggregate the unfiltered 30m grid to a grid that is close to 1km in resolution, and extract values from these cells using the 1km MODIS centroids. The aggregation will use the mean of the 30m cells in the new larger cells.  
+
+## Filtered grid
+
+Extract nearest filtered value to ~1km resolution MODIS centroids.
+
+```{r extract_filtered}
+extract_filtered = extract(srtm_focal, grid_aoi)
+grid_aoi$elev_filtered <- extract_filtered
+grid_aoi
+```
+
+Preview extracted filtered elevation
+```{r preview_extracted_filtered, eval=FALSE}
+mapview(grid_aoi, zcol = "elev_filtered", map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+```
+
+## Unfiltered grid
+
+Resolution of SRTM30m is 0.0002777778.  
+Resolution of MODIS grid if reprojected to WGS84 is 0.00887.  
+That's a difference of 31.932x  
+
+For this method, we'll resample the unfiltered 30m DEM to 930m (31x), then query it with the 1km grid points.  
+
+### Aggregate to approximately MODIS resolution
+```{r aggregate_srtm}
+srtm_agg = aggregate(srtm_crop, fact = 31, fun = "mean", na.rm = TRUE, expand = TRUE)
+srtm_agg
+```
+
+### extract
+
+```{r extract_aggregated}
+extract_aggreg31 = extract(srtm_agg, grid_aoi)
+grid_aoi$elev_agg31 <- extract_aggreg31
+```
+
+# Extracted values
+
+```{r modis_grid_status}
+grid_aoi
+```
+
+```{r modis_as_DT}
+gridDT = as.data.table(grid_aoi)
+gridDT[, index := .I]
+setkey(gridDT, elev_filtered, elev_agg31)
+```
+
+## Summaries of extracted elevation
+
+Very quick and dirty comparisons of the values extracted two different ways.
+
+#### Means:  
+```{r mean_extracted}
+extracted_means = gridDT[, .(filter_extract = mean(elev_filtered, na.rm = T), raw_agg31 = mean(elev_agg31, na.rm = T))]
+t(extracted_means)
+```
+
+#### Linear model:  
+```{r lm_extracted}
+summary(lm(formula = elev_agg31 ~ elev_filtered, data = gridDT))
+```
+
+#### Violin plots:  
+```{r melt_extracted}
+grid_melt = melt.data.table(gridDT[!is.na(elev_filtered),c(2:3,6)], id.vars = "index")
+setnames(grid_melt, "variable", "Extract_Method")
+setnames(grid_melt, "value", "Elevation_Meters")
+```
+
+```{r violin_extracted}
+library(ggplot2)
+ggplot(grid_melt, aes(Extract_Method, Elevation_Meters)) + geom_violin(aes(fill = Extract_Method))
+```
+
+#### Line plots, sorted by increasing filtered elevation values:  
+
+```{r line_extracted}
+ggplot(grid_melt, aes(index, Elevation_Meters, group=Extract_Method)) + geom_line(aes(color=Extract_Method))
+```
+
+# Add unique ID from pairing function
+
+```{r pair_functions}
+pair_prec = 4                                        # precision is set to four decimal places 
+pair<-function(x,y){ 0.5*(x+y)*(x+y+1) +  x }        # pairing function expects positive integers
+prepLon <- function(x){trunc((x+180)*10^pair_prec)}  # longitude DD, +180 makes always positive, as integers
+prepLat <- function(y){trunc((y+90)*10^pair_prec)}   # latitude DD, +90 makes always positive, as integers
+```
+
+```{r grid_pairids}
+gridDT[, idmodispair4 := pair(prepLon(x),prepLat(y))]
+rmarkdown::paged_table(gridDT[!is.na(elev_filtered), .(idmodispair4, x, y, elev_filtered, elev_agg31)])
+```
+
+# Export data
+
+```{r export_gridDT}
+write_fst(gridDT[!is.na(elev_filtered), .(idmodispair4, x, y, elev_filtered, elev_agg31)],
+          "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst", compress = 100)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
