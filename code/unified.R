@@ -479,14 +479,15 @@ summarize.cv.results = function(multirun.output)
         ground[order(stn), .(latitude, longitude)])))
     diag(idist) = 0
     ustns = unique(ground$stn)
-    j1 = quote(.(.N, sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
+    j1 = quote(.(.N, stn = length(unique(stn)),
+        sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
     list(
         overall = cbind(
             d
                 [, eval(j1), keyby = .(year, dv)]
                 [, .(year, dv,
-                    N, sd, rmse, "sd - rmse" = sd - rmse, R2)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse, R2)],
             d
                 [, .(mean.obs = mean(ground.temp), mean.pred = mean(pred)),
                     keyby = .(year, dv, stn)]
@@ -513,12 +514,12 @@ summarize.cv.results = function(multirun.output)
                     imp.d = satellite.temp.day.imputed,
                     imp.n = satellite.temp.night.imputed)]
                 [, .(year, dv, imp.d, imp.n,
-                    N, sd, rmse, "sd - rmse" = sd - rmse)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = cbind(
             d
                 [, eval(j1), keyby = .(year, dv, season)]
                 [, .(year, dv, season,
-                    N, sd, rmse, "sd - rmse" = sd - rmse)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
             d
                 [, .(stn, merr = mean(pred - ground.temp)),
                     keyby = .(year, dv, season, stn)]
