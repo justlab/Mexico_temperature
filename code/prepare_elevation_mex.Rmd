@@ -80,7 +80,8 @@ srtm_crop = srtm_mosaic
 Most mapview previews turned off for now because exported HTML was ~250MB
 ```{r preview_cropped, eval=FALSE}
 # reorder basemaps so that OpenStreetmap is first
-mapview(srtm_crop, map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+mapviewOptions(basemaps = c("OpenStreetMap", "Esri.WorldImagery", "OpenTopoMap", "CartoDB.Positron", "CartoDB.DarkMatter"))
+mapview(srtm_crop)
 ```
 
 # Prepare Gauss filter
@@ -123,8 +124,7 @@ srtm_focal
 
 Preview filtered 30m elevation
 ```{r preview_filtered, eval=FALSE}
-# reorder basemaps so that OpenStreetmap is first
-mapview(srtm_focal, map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+mapview(srtm_focal)
 ```
 
 # Get 1km grid
@@ -181,7 +181,7 @@ grid_aoi
 
 Preview extracted filtered elevation
 ```{r preview_extracted_filtered, eval=FALSE}
-mapview(grid_aoi, zcol = "elev_filtered", map.types = mapviewGetOption("basemaps")[c(3,4,1,2,5)])
+mapview(grid_aoi, zcol = "elev_filtered")
 ```
 
 ## Unfiltered grid
@@ -244,10 +244,46 @@ library(ggplot2)
 ggplot(grid_melt, aes(Extract_Method, Elevation_Meters)) + geom_violin(aes(fill = Extract_Method))
 ```
 
-#### Line plots, sorted by increasing filtered elevation values:  
+#### 2D point plot of differences
 
-```{r line_extracted}
-ggplot(grid_melt, aes(index, Elevation_Meters, group=Extract_Method)) + geom_line(aes(color=Extract_Method))
+Filtered - Aggregated
+
+```{r calc_diff}
+gridDT[!is.na(elev_filtered) & !is.na(elev_agg31), elev_diff := (elev_filtered - elev_agg31)]
+summary(gridDT$elev_diff)
+```
+
+```{r plot_diff_points}
+ggplot(data = gridDT[!is.na(elev_diff)], aes(x, y)) + geom_point(aes(color = elev_diff), size = 1) +
+  scale_colour_gradient2(low = "blue", high = "red")
+```
+
+#### Line plot: cell sequence around largest difference 
+
+Largest difference is at index 240154.
+
+```{r diff_table}
+rmarkdown::paged_table(gridDT[order(elev_diff, decreasing = T)][1:20])
+```
+
+```{r line_largest_difference}
+ggplot(grid_melt[index %in% 240100:240200], aes(index, Elevation_Meters, group=Extract_Method)) +
+  geom_line(aes(color=Extract_Method))
+```
+
+#### Mapview around largest difference
+
+Region around maximum difference (where filtered - aggregated = 514)
+
+```{r mapview_largest_difference}
+library(RColorBrewer); pal <- colorRampPalette(brewer.pal(9, "RdYlGn"))
+mapDT = gridDT[!is.na(elev_diff) & y > 18 & y < 18.5 & x < -96.5 & x > -97, .(x, y, elev_diff)]
+mapviewOptions(basemaps = c("OpenTopoMap", "Esri.WorldImagery"))
+mapview(mapDT, zcol = "elev_diff", xcol = "x", ycol = "y", crs = 4326, 
+        alpha = 0.2, alpha.regions = 0.9, col.regions = rev(pal(7)), 
+        at = rev(round(c(min(mapDT$elev_diff)-1, min(mapDT$elev_diff) + 50, -100, 0,
+                     100, max(mapDT$elev_diff) - 50, max(mapDT$elev_diff)+1),0)), 
+        legend = TRUE)
 ```
 
 # Add unique ID from pairing function
