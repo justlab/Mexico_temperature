@@ -30,12 +30,13 @@ suppressPackageStartupMessages(
     library(fst)
     library(FNN)
     library(lme4)
+    library(optimx)
     library(ape)
     library(future.apply)
     library(zeallot)
     library(caret)})
 
-source("../Just_universal/code/pairmemo.R")
+source("~/Jdrive/PM/Just_Lab/projects/universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
@@ -397,11 +398,30 @@ train.model = function(dataset)
         dataset[,
             setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
             with = F])
-    m = lmer(data = predict(preproc, dataset), update.formula(fe,
-        ground.temp ~ . + (1 | yday)))
+    m = lmer.alternatives(
+        data = predict(preproc, dataset),
+        formula = update.formula(fe, ground.temp ~ . +
+            (1 + satellite.temp.day + satellite.temp.night | yday)),
+        optimizers = list(
+            list(),
+            list(control = lmerControl(optimizer = "Nelder_Mead")),
+            list(control = lmerControl(optimizer = "optimx",
+                optCtrl = list(method = "L-BFGS-B"))),
+            list(control = lmerControl(optimizer = "optimx",
+                optCtrl = list(method = "nlminb")))))
     function(newdata)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
+
+lmer.alternatives = function(formula, data, optimizers)
+  # Try calling `lmer` with each list of arguments in `optimizers`
+  # and return the model from the first fit that doesn't produce any
+  # warnings.
+   {for (arglist in optimizers)
+        tryCatch(
+            return(do.call(lmer, c(list(formula, data), arglist))),
+            warning = function(w) NULL)
+    stop("All lmer.alternatives failed")}
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
@@ -411,10 +431,13 @@ run.cv = function(the.year, dvname)
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
     message("run.cv: ", the.year, " ", dvname)
 
+    bar = txtProgressBar(min = 0, max = n.folds, style = 3)
     for (fold.i in 1 : n.folds)
        {d = impute.nontemp.ground.vars(d.master, fold.i)
         f.pred = train.model(d[fold != fold.i])
-        d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]}
+        d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]
+        setTxtProgressBar(bar, fold.i)}
+    close(bar)
 
     cbind(d.master, year = the.year, dv = dvname)}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
@@ -456,14 +479,15 @@ summarize.cv.results = function(multirun.output)
         ground[order(stn), .(latitude, longitude)])))
     diag(idist) = 0
     ustns = unique(ground$stn)
-    j1 = quote(.(.N, sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
+    j1 = quote(.(.N, stn = length(unique(stn)),
+        sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
     list(
         overall = cbind(
             d
                 [, eval(j1), keyby = .(year, dv)]
                 [, .(year, dv,
-                    N, sd, rmse, "sd - rmse" = sd - rmse, R2)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse, R2)],
             d
                 [, .(mean.obs = mean(ground.temp), mean.pred = mean(pred)),
                     keyby = .(year, dv, stn)]
@@ -490,12 +514,12 @@ summarize.cv.results = function(multirun.output)
                     imp.d = satellite.temp.day.imputed,
                     imp.n = satellite.temp.night.imputed)]
                 [, .(year, dv, imp.d, imp.n,
-                    N, sd, rmse, "sd - rmse" = sd - rmse)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
         by.season = cbind(
             d
                 [, eval(j1), keyby = .(year, dv, season)]
                 [, .(year, dv, season,
-                    N, sd, rmse, "sd - rmse" = sd - rmse)],
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
             d
                 [, .(stn, merr = mean(pred - ground.temp)),
                     keyby = .(year, dv, season, stn)]
