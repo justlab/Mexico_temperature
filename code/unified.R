@@ -36,7 +36,7 @@ suppressPackageStartupMessages(
     library(zeallot)
     library(caret)})
 
-source("~/Jdrive/PM/Just_Lab/projects/universal/code/pairmemo.R")
+source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
