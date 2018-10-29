@@ -62,8 +62,7 @@ nontemp.ground.vars = c(
     "wind.speed.mean")
 
 get.nonsatellite.data = function()
-   {# Load the master grid.
-    message("Loading master grid")
+   {message("Loading master grid")
     master.grid <<- rbindlist(Map(read.vegetation.file, full.grid = T,
         grep(value = T, "\\.A\\d{4}001\\.[^/]+$",
             vegetation.paths("aqua", master.grid.year))))
@@ -81,8 +80,7 @@ get.nonsatellite.data = function()
     fullgrid = fullgrid[, .(mrow, long_lst, lat_lst, elevation)]
     setkey(fullgrid, mrow)
 
-    # Load the data from ground stations.
-    message("Loading ground data")
+    message("Loading data from ground stations")
     ground = readRDS("data/work/all_stations_final.rds")
     setnames(ground,
         c("low.temp", "temp.mean", "hi.temp"),
@@ -123,7 +121,7 @@ in.study.area = function(lon, lat)
 
 set.mrows = function(d, longitude.col, latitude.col)
   # Adds to the given data table a column `mrow` that specifies
-  # corresponding row of `master.grid`.
+  # the corresponding row of `master.grid`.
    {x = d[[longitude.col]]
     y = d[[latitude.col]]
     stopifnot(all(in.study.area(x, y)))
