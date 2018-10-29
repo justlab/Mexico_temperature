@@ -41,6 +41,7 @@ pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
+elevation.path = "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst"
 
 plan(multiprocess)
 
@@ -50,9 +51,12 @@ master.grid.year = 2012L
   # This needs to be a year for which we have satellite vegetation
   # data, but the exact value shouldn't matter much.
 
-study.area = list(
-  lon.min = -101, lon.max = -96,
-  lat.min = 17, lat.max = 22)
+in.study.area = function(lon, lat)
+  # Use a rectangular area, except cut off a piece of ocean where
+  # there's elevation data.
+    lon >= -100.9 & lon <= -96.1 &
+    lat >= 17.1 & lat <= 21.9 &
+    !(lon >= -97.15 & lat >= 20.75)
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 
@@ -71,14 +75,14 @@ get.nonsatellite.data = function()
       .(lon = x, lat = y)]
     stopifnot(nrow(unique(master.grid)) == nrow(master.grid))
 
-    # Load spatial data.
-    message("Loading spatial data")
-    fullgrid = fread("data/work/mexico_grid_ndvi_water_final.csv")
-    set.mrows(fullgrid, "long_lst", "lat_lst")
-    # `mrow`s should all be distinct.
-    stopifnot(!anyDuplicated(fullgrid$mrow))
-    fullgrid = fullgrid[, .(mrow, long_lst, lat_lst, elevation)]
-    setkey(fullgrid, mrow)
+    message("Loading elevation")
+    # Read from fst files produced by `prepare_elevation_mex.Rmd`.
+    elevation = read_fst(elevation.path, as.data.table = T)[
+        in.study.area(x, y)]
+    set.mrows(elevation, "x", "y")
+    stopifnot(!anyDuplicated(elevation$mrow))
+    master.grid[elevation$mrow, elevation := elevation$elev_filtered]
+    stopifnot(!anyNA(master.grid$elevation))
 
     message("Loading data from ground stations")
     ground = readRDS("data/work/all_stations_final.rds")
@@ -106,18 +110,13 @@ get.nonsatellite.data = function()
     stns.by.dist = get.knnx(
         as.matrix(unique(
             ground[order(stn), .(longitude, latitude)])),
-        master.grid,
+        master.grid[, .(lon, lat)],
         k = length(unique(ground$stn)))$nn.index
     stns.by.dist = apply(stns.by.dist, 2, function(v)
         sort(unique(ground$stn))[v])
 
-    list(master.grid, fullgrid, ground, stns.by.dist)}
+    list(master.grid, ground, stns.by.dist)}
 get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
-
-in.study.area = function(lon, lat)
-    with(study.area,
-        lon >= lon.min & lon <= lon.max &
-        lat >= lat.min & lat <= lat.max)
 
 set.mrows = function(d, longitude.col, latitude.col)
   # Adds to the given data table a column `mrow` that specifies
@@ -126,7 +125,7 @@ set.mrows = function(d, longitude.col, latitude.col)
     y = d[[latitude.col]]
     stopifnot(all(in.study.area(x, y)))
     set(d, j = "mrow", value =
-        get.knnx(master.grid, cbind(x, y), k = 1)$nn.index[,1])}
+        get.knnx(master.grid[, .(lon, lat)], cbind(x, y), k = 1)$nn.index[,1])}
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
@@ -230,7 +229,8 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     d[, `:=`(
         yday = yday(date),
         month = month(date),
-        date = NULL)]
+        date = NULL,
+        elevation = master.grid[mrow, elevation])]
 
     message("Merging in ground measurements")
     # This step can increase the number of rows in `d` a bit because
@@ -260,13 +260,6 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
             stopifnot(!anyNA(d$ndvi))
             setnames(d, "ndvi", paste0(satellite, ".ndvi"))}
         d})
-
-    message("Merging in land-use data")
-    d = merge(d,
-        fullgrid[, .(
-            mrow, elevation)],
-        by = "mrow",
-        all.x = T)
 
     combine.sat = function(terra, aqua)
         ifelse(is.na(terra),
@@ -588,4 +581,4 @@ predict.temps = function(file)
         temperature.hi = ground.temp.hi)]}
 predict.temps = pairmemo(predict.temps, pairmemo.dir, mem = T, fst = T)
 
-c(master.grid, fullgrid, ground, stns.by.dist) %<-% get.nonsatellite.data()
+c(master.grid, ground, stns.by.dist) %<-% get.nonsatellite.data()
