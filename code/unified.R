@@ -53,7 +53,7 @@ master.grid.year = 2012L
 
 in.study.area = function(lon, lat)
   # Use a rectangular area, except cut off a piece of ocean where
-  # there's elevation data.
+  # there's no elevation data.
     lon >= -100.9 & lon <= -96.1 &
     lat >= 17.1 & lat <= 21.9 &
     !(lon >= -97.15 & lat >= 20.75)
