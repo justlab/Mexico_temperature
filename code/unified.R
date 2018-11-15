@@ -89,6 +89,10 @@ get.nonsatellite.data = function()
     setnames(ground,
         c("low.temp", "temp.mean", "hi.temp"),
         temp.ground.vars)
+    # Most stations use m/s as the unit of wind speed, but some
+    # use km/hour. Convert those to m/s.
+    ground[stn >= 20002 & stn <= 20067,
+        wind.speed.mean := (wind.speed.mean * 1000) / 60^2]
     # There are 39 cases in which we have more than one observation
     # for a particular station and day (which all happen to be in 2013
     # from station 76677). In each case, keep only the second of the
