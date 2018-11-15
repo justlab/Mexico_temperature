@@ -41,6 +41,7 @@ pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
+redmet.dir = "/data-belle/Mexico_temperature/redmet"
 elevation.path = "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst"
 
 plan(multiprocess)
@@ -89,6 +90,16 @@ get.nonsatellite.data = function()
     setnames(ground,
         c("low.temp", "temp.mean", "hi.temp"),
         temp.ground.vars)
+    redmet = get.redmet()
+    # REDMET station numbers (`stn`) are 64-bit integers. Reduce
+    # them so we can use R integers.
+    redmet[, stn := as.integer(stn - min(stn)) + max(ground$stn) + 1L]
+    ground = rbind(
+        ground[, c(.(redmet = F), mget(c(
+            "date", "stn", "longitude", "latitude",
+            temp.ground.vars,
+            nontemp.ground.vars)))],
+        redmet[, c(.(redmet = T), mget(colnames(.SD)))])
     # Most stations use m/s as the unit of wind speed, but some
     # use km/hour. Convert those to m/s.
     ground[stn >= 20002 & stn <= 20067,
@@ -130,6 +141,39 @@ set.mrows = function(d, longitude.col, latitude.col)
     stopifnot(all(in.study.area(x, y)))
     set(d, j = "mrow", value =
         get.knnx(master.grid[, .(lon, lat)], cbind(x, y), k = 1)$nn.index[,1])}
+
+get.redmet = function()
+  # Get data from the REDMET network of ground stations.
+  # The files are from http://www.aire.cdmx.gob.mx/default.php?opc=%27aKBhnmI=%27&opcion=Zw
+   {d = rbindlist(lapply(list.files(redmet.dir, pattern = "meteor", full.names = T), function(path)
+       {d = fread(cmd = paste("zcat", shQuote(path)))
+        setnames(d, sub("^id_", "cve_", colnames(d)))
+        stopifnot(identical(colnames(d), c(
+            "date", "cve_station", "cve_parameter", "value", "unit")))
+        d[, unit := NULL]
+        d = dcast(d, date + cve_station ~ cve_parameter)
+        ifenough = function(v, then)
+          # Only use a vector of hourly values if at least 18 out of
+          # 24 hours are included.
+            if (sum(!is.na(v)) >= 18) then else NA_real_
+        d[,
+            .(
+                ground.temp.lo = ifenough(TMP, min(TMP, na.rm = T)),
+                ground.temp.mean = ifenough(TMP, mean(TMP, na.rm = T)),
+                ground.temp.hi = ifenough(TMP, max(TMP, na.rm = T)),
+                wind.speed.mean = ifenough(WSP, mean(WSP, na.rm = T))),
+            by = .(date = as.Date(date, "%d/%m/%Y"), cve_station)]}))
+    stations = fread(file.path(redmet.dir, "cat_estacion.csv"),
+        encoding = "Latin-1", skip = 1)
+    stopifnot(identical(colnames(stations), c(
+        "cve_estac", "nom_estac", "longitud", "latitud", "alt",
+        "obs_estac", "id_station")))
+    stopifnot(all(d$cve_station %in% stations$cve_estac))
+    d = merge(d,
+        stations[, .(cve_estac, longitud, latitud, id_station)],
+        by.x = "cve_station", by.y = "cve_estac")
+    d[, .(date, stn = id_station, longitude = longitud, latitude = latitud,
+        ground.temp.lo, ground.temp.mean, ground.temp.hi, wind.speed.mean)]}
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
