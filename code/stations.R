@@ -9,6 +9,7 @@ suppressPackageStartupMessages(
     library(XML)
     library(DBI)
     library(stringr)
+    library(measurements)
     library(pbapply)})
 
 source("../Just_universal/code/pairmemo.R")
@@ -639,9 +640,28 @@ get.ground.raw = function()
         obs[, stn := paste(stn, net)]
         networks[[net]] = punl(stations, obs)}
 
+    # Combine all networks.
     stations = rbindlist(lapply(networks, function(x)
         x$stations[, .(stn, network, lon, lat)]))
     obs = rbindlist(fill = T, lapply(networks, function(x)
         x$obs))
+
+    # Convert units.
+    for (unit in list(
+            list(from = "F", to = "C"),
+            list(from = "mmHg", to = "hPa"),
+            list(from = "kmph", to = "mps")))
+       {reg = sprintf("\\.%s\\.(mean|min|max|total)$", unit$from)
+        cn = copy(colnames(obs))
+        for (col.from in cn)
+            if (str_detect(col.from, reg))
+               {col.to = str_replace(col.from, reg,
+                    sprintf(".%s.\\1", unit$to))
+                obs[, (col.to) := ifelse(is.na(get(col.to)),
+                    (if (unit$from == "kmph" && unit$to == "mps")
+                        conv_multiunit(get(col.from), "km / hr", "m / sec") else
+                        conv_unit(get(col.from), unit$from, unit$to)),
+                    get(col.to))]
+                obs[, (col.from) := NULL]}}
 
     punl(stations, obs)}
