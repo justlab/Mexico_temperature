@@ -174,7 +174,7 @@ get.ground.raw.unam = function()
     stns = c("CCA", paste0("ENP", 1:9), paste0("CCH", c("A", "N", "O", "S", "V")))
     stations = data.table()
     message("Loading UNAM")
-    obs = rbindlist(unlist(rec = F, pblapply(stns, function(stn.nominal)
+    obs = unique(rbindlist(unlist(rec = F, pblapply(stns, function(stn.nominal)
       # The station is "nominal" in the sense that files for one
       # station can have observations that are stated inside the file
       # to come from a different station.
@@ -220,6 +220,15 @@ get.ground.raw.unam = function()
                     "\\s+", "")
                 if (stn.name == "CCH0")
                     stn.name = "CCHO"
+                if (stn.name == "ENP4")
+                  # This station sometimes has more than one observation for the
+                  # same time with different values (e.g., compare
+                  # "2007/10/31 08:00:00" in
+                  #     2007_ENP4.zip/2007-ENP4-L1/2007-10-ENP4-L1.CSV
+                  # to the same row in
+                  #     2007_CCA.zip/2007-CCA-L1/2007-10-CCA-L1.CSV
+                  # .) Let's ignore it.
+                    return(data.table())
                 latlon = str_match(text, mlr("^Lat ([0-9.]+) N, Lon ([0-9.]+) W"))
                 station = data.table(
                     stn.name = stn.name,
@@ -250,8 +259,8 @@ get.ground.raw.unam = function()
                     relative.humidity.percent.mean = if.enough.halfhourly(mean, Hum_Rel),
                     pressure.hPa.mean = if.enough.halfhourly(mean, Presion_bar))]
                 # Drop rows that are missing on all the data columns.
-                vnames = setdiff(colnames(d), c("date", "loc"))
-                d[rowSums(!is.na(d[, mget(vnames)])) > 0]})}))})))
+                vnames = setdiff(colnames(d), c("date", "stn"))
+                d[rowSums(!is.na(d[, mget(vnames)])) > 0]})}))}))))
 
     stations[, stn := .I]
     punl(stations, obs)}
