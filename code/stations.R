@@ -16,7 +16,7 @@ source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 source("../Just_universal/code/punl.R")
 
-data.root = "/data-union/Mexico_temperature/stations"
+data.root = "/data-union/Mexico_temperature"
 wunderground.db.path = "/data-belle/wunderground/wunderground-daily-mexico.sqlite"
 
 earliest.date = "2003-01-01"
@@ -31,10 +31,12 @@ target.tz = "Etc/GMT+6"
 ## * Subroutines
 ## ------------------------------------------------------------
 
+stpath = function(...) file.path(data.root, "stations", ...)
+
 download = function(url, to, f, ...)
   # Downloads a file from `url` and saves it to `to` if there isn't
   # already a file there, then calls `f(to, ...)`.
-   {to = file.path(data.root, "downloads", to)
+   {to = stpath("downloads", to)
     dir.create(dirname(to), showWarnings = F, recursive = T)
     if (!file.exists(to))
         stopifnot(0 == system2("wget", c(
@@ -269,8 +271,8 @@ get.ground.raw.smn.observatories = function()
     na.value = -99999
 
     # Read in the the giant CSV of hourly observations.
-    whole = fread(cmd = paste("unzip -p", shQuote(file.path(
-        data.root, "simat-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
+    whole = fread(cmd = paste("unzip -p", shQuote(stpath(
+        "simat-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
     setnames(whole, colnames(whole),
         gsub("-", "_", colnames(whole), fixed = T))
     setnames(whole,
@@ -285,7 +287,7 @@ get.ground.raw.smn.observatories = function()
     # Read the file of variable codes and clean up the resulting
     # variable names.
     variable.codes = fread(paste(collapse = "\n", sub("\t\t", "\t", local(
-       {o = file(encoding = "Windows-1252", file.path(data.root,
+       {o = file(encoding = "Windows-1252", stpath(
             "simat-raw", "OBS_2018",
             "ELEMENTOS_HORARIOS_OBSERVATORIOS.txt"))
         x = readLines(o, warn = F)
@@ -314,7 +316,7 @@ get.ground.raw.smn.observatories = function()
             daily.summary(d, "hour", vname)}))
 
     # Collect stations.
-    stations = as.data.table(read_excel(file.path(data.root,
+    stations = as.data.table(read_excel(stpath(
         "simat-raw", "OBS_2018", "Claves_Observatorios.xlsx")))
     stations = stations[!is.na(CLAVE), .(
         stn = as.integer(CLAVE),
@@ -338,8 +340,8 @@ get.ground.raw.smn.emas = pairmemo(get.ground.raw.smn.emas, pairmemo.dir)
 read.es = function(emas = F)
    {fnames = list.files(
        (if (emas)
-           file.path(data.root, "simat-emas-csv") else
-           file.path(data.root, "simat-raw", "ESIMEs_2018")),
+           stpath("simat-emas-csv") else
+           stpath("simat-raw", "ESIMEs_2018")),
        full.names = T)
 
     if (!emas)
