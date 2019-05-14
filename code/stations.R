@@ -23,7 +23,7 @@ earliest.date = "2003-01-01"
   # The earliest date we're interested in.
 hourly.vals.required = 18  # I.e., 3/4 of the day.
 
-# In the output, all dates signify UTC-06:00.
+# In the output, all dates signify UTC-06:00 (except for Wunderground).
 target.tz = "Etc/GMT+6"
   # Yes, the sign is intepreted in the opposite fashion from usual.
 
@@ -233,7 +233,12 @@ get.ground.raw.unam = function()
                     str_sub(text, str_locate(text, mlr("^[0-9]{4}/"))[,1]),
                     col.names = str_split(str_extract(text, mlr("^Fecha_hora,.+")), ",")[[1]],
                     na.strings = "null")
-                d = d[, by = .(date = as.Date(Fecha_hora)), .(
+
+                # Read dates, and drop illegal dates like September 31st.
+                d[, date := as.Date(Fecha_hora)]
+                d = d[!is.na(date)]
+
+                d = d[, by = date, .(
                     stn = stn,
                     temp.C.mean = if.enough.halfhourly(mean, Temp),
                     temp.C.max = if.enough.halfhourly(max, Temp),
@@ -272,6 +277,10 @@ get.ground.raw.smn.observatories = function()
         c("Station_ID", "ELEMENT_CODE", "YEAR_MONTH_DAY"),
         c("stn", "variable", "date"))
     whole = whole[date >= earliest.date]
+
+    # Read dates, and drop illegal dates like September 31st.
+    whole[, date := as.Date(date)]
+    whole = whole[!is.na(date)]
 
     # Read the file of variable codes and clean up the resulting
     # variable names.
@@ -610,6 +619,7 @@ get.ground.raw.wunderground = function()
         from Stations"))
     obs = as.data.table(dbGetQuery(db, "select
             stn,
+            date,
             max_temperature as 'temp.F.max',
             min_temperature as 'temp.F.min',
             temperature as 'temp.F.mean',
@@ -618,6 +628,8 @@ get.ground.raw.wunderground = function()
             pressure
         from Daily"))
     dbDisconnect(db)
+    obs[, date := as.Date(as.character(date), format = "%Y%m%d")]
+    stopifnot(!anyNA(obs$date))
     punl(stations, obs)}
 
 ## ------------------------------------------------------------
