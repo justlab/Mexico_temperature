@@ -609,8 +609,8 @@ es.stations = function(obs, emas = F)
 
 ## ** Wunderground
 
-# Wunderground's dates are in America/Mexico_City, so we aren't
-# actually using it for now.
+# Slippage: Wunderground's dates are in America/Mexico_City,
+# not `target.tz`.
 
 get.ground.raw.wunderground = function()
    {db = dbConnect(RSQLite::SQLite(), wunderground.db.path)
@@ -642,14 +642,16 @@ get.ground.raw = function()
         unam = get.ground.raw.unam(),
         smno = get.ground.raw.smn.observatories(),
         esimes = get.ground.raw.smn.esimes(),
-        emas = get.ground.raw.smn.emas())
+        emas = get.ground.raw.smn.emas(),
+        wunderground = get.ground.raw.wunderground())
 
     # Add network identifiers.
     for (net in names(networks))
        {stations = copy(networks[[net]]$stations)
         stations[, network := net]
         obs = copy(networks[[net]]$obs)
-        obs[, stn := paste(stn, net)]
+        for (x in list(stations, obs))
+            x[, stn := paste(stn, net)]
         networks[[net]] = punl(stations, obs)}
 
     # Combine all networks.
@@ -677,3 +679,4 @@ get.ground.raw = function()
                 obs[, (col.from) := NULL]}}
 
     punl(stations, obs)}
+get.ground.raw = pairmemo(get.ground.raw, pairmemo.dir)
