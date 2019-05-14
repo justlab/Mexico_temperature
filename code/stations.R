@@ -7,6 +7,7 @@ suppressPackageStartupMessages(
    {library(data.table)
     library(readxl)
     library(XML)
+    library(DBI)
     library(stringr)
     library(pbapply)})
 
@@ -15,6 +16,7 @@ pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 source("../Just_universal/code/punl.R")
 
 data.root = "/data-union/Mexico_temperature/stations"
+wunderground.db.path = "/data-belle/wunderground/wunderground-daily-mexico.sqlite"
 
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
@@ -593,6 +595,28 @@ es.stations = function(obs, emas = F)
     obs = obs[!is.na(obs.matches)]
     obs[, stn := stations[na.omit(obs.matches), stn]]
 
+    punl(stations, obs)}
+
+## ** Wunderground
+
+# Wunderground's dates are in America/Mexico_City, so we aren't
+# actually using it for now.
+
+get.ground.raw.wunderground = function()
+   {db = dbConnect(RSQLite::SQLite(), wunderground.db.path)
+    stations = as.data.table(dbGetQuery(db, "select
+            stn, lon, lat
+        from Stations"))
+    obs = as.data.table(dbGetQuery(db, "select
+            stn,
+            max_temperature as 'temp.F.max',
+            min_temperature as 'temp.F.min',
+            temperature as 'temp.F.mean',
+            precip_today,
+            wind_speed,
+            pressure
+        from Daily"))
+    dbDisconnect(db)
     punl(stations, obs)}
 
 ## ------------------------------------------------------------
