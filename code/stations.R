@@ -399,7 +399,7 @@ read.es = function(emas = F)
 
 process.es.observations = function(ds, emas = F, n.jobs = NULL)
    {di = 0
-    rbindlist(fill = T, Filter(nrow, pblapply(ds, cl = n.jobs, function(d)
+    d = rbindlist(fill = T, Filter(nrow, pblapply(ds, cl = n.jobs, function(d)
        {di <<- di + 1
         #message(di)
         fname = names(ds)[di]
@@ -451,7 +451,7 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                     if (is.character(v))
                         v = as.numeric(str_replace(v, fixed(","), "."))
                     return(v)}
-        d = d[, .(
+        d[, .(
             stn,
             date = as.Date(tz = target.tz,
               # Iván Gutiérrez-Avila says all timestamps are in UTC.
@@ -490,33 +490,27 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
             wind.speed.gust.kmph = ifcol("WSMK(kph)"),
             wind.speed.u.mps = ifcol("AvgWSU(m/s)"),
             wind.speed.v.mps = ifcol("AvgWSV(m/s)"),
-            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]
+            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]})))
 
-        combine.dailies(lapply(
-            setdiff(colnames(d), c("stn", "date")),
-            function(vname)
-                daily.summary(
-                    d[, .(stn, date, value = get(vname))],
-                    (if (round(1 / mean(is.na(d[[vname]]))) == 5)
-                      # This variable is only provided on an hourly
-                      # basis.
-                        "hour" else
-                        "10 min"),
-                    vname)))})))}
+    combine.dailies(lapply(
+        setdiff(colnames(d), c("stn", "date")),
+        function(vname)
+            daily.summary(
+                d[, .(stn, date, value = get(vname))],
+                "10 min",
+                  # XTRA: some files have some variables present
+                  # only at a coarser interval, such as 1 hour.
+                vname)))}
 
 es.stations = function(obs, emas = F)
-   {stations = as.data.table(
-        if (emas) download(
-            "https://smn.cna.gob.mx/tools/DATA/Observando%20el%20Tiempo/EMAS/EMAS.xlsx",
-            "emas_stations.xlsx",
-            read_excel)
-        else download(
-            "http://web.archive.org/web/20180809001831id_/http://smn1.conagua.gob.mx/emas/catalogoa.html",
-            "esimes_stations.html",
-            function(fname)
-                readHTMLTable(fname,
-                    encoding = "UTF-8", which = 6,
-                    header = T, stringsAsFactors = F)))
+   {stations = as.data.table(download(
+        "http://web.archive.org/web/20180809001831id_/http://smn1.conagua.gob.mx/emas/catalogoa.html",
+        "simat_es_stations.html",
+        function(fname)
+            readHTMLTable(fname,
+                encoding = "Windows-1258",
+                which = (if (emas) 5 else 6),
+                header = T, stringsAsFactors = F)))
 
     coord = function(s)
        {s = str_replace_all(s, fixed(","), ".")
@@ -525,8 +519,8 @@ es.stations = function(obs, emas = F)
         e[,1] + e[,2]/60 + e[,3]/(60*60)}
     stations = stations[, .(
         stn = NOMBRE,
-        lon = -coord(if (emas) `Longitud W` else `Longitud (Oeste)`),
-        lat = coord(if (emas) `Latitud N` else `Latitud (Norte)`))]
+        lon = -coord(`Longitud (Oeste)`),
+        lat = coord(`Latitud (Norte)`))]
     # When stations are duplicated, keep only the first.
     stations = stations[, by = stn, head(.SD, 1)]
     stopifnot(!anyNA(stations))
@@ -539,6 +533,7 @@ es.stations = function(obs, emas = F)
          l[[x]] = iconv(tolower(l[[x]]), to = "ASCII//TRANSLIT")
 
          replacements = c(
+             "\\s+" = " ",
              "^c\\." = "canon ",
              "\\bcanon del?\\b" = "canon",
              "\\bbh\\b" = "bahia",
@@ -557,8 +552,9 @@ es.stations = function(obs, emas = F)
              "\\s+\\(.+?\\)" = "",
              "\\b(ciudad\\b|cd\\b\\.?)" = "",
              "\\bgpe$" = "",
-             "\\bescuela nacional de ciencias biol.?gicas(\\z| ipn)" = "escuela nacional de ciencias biologicas i",
+             " ipn$" = "",
              "\\bencb" = "escuela nacional de ciencias biologicas",
+             "\\bescuela nacional de ciencias biol.?gicas\\z" = "escuela nacional de ciencias biologicas i",
              "2$" = "ii",
              "^utt$" = "universidad tecnologica de tecamachalco",
              "^gust.*" = "gustavo diaz ordaz",
@@ -569,15 +565,16 @@ es.stations = function(obs, emas = F)
              ".+?emil.+" = "presa emilio lopez zamora",
              ".+?abelar.+" = "presa abelardo l. rodriguez",
              "\\bcumbres de mty - el diente" = "el diente",
-             "\\bv carranza" = "venustiano carranza",
+             "\\bvilla carranza" = "venustiano carranza",
              "\\bnochix\\b" = "nochistlan",
              "^presa cuchi" = "presa el cuchillo",
              "(presa )?\\bla cang.*" = "presa cangrejera",
              "\\bjuani\\S*" = "juanico",
              "\\btantak\\b" = "tantaquin",
-             "\\btlapa\\b.*" = "tlapa de comonfort")
+             "\\btlapa\\b.*" = "tlapa de comonfort",
+             "\\bpantanos de centla\\b" = "centla")
          for (r in names(replacements))
-             l[[x]] = str_replace(l[[x]], r, replacements[[r]])
+             l[[x]] = str_replace_all(l[[x]], r, replacements[[r]])
 
          l[[x]] = trimws(str_replace_all(l[[x]], "\\s+", " "))}
 
@@ -599,8 +596,8 @@ es.stations = function(obs, emas = F)
     # exactly one good match.
     no.matches = c(
         "^cca$", "^leon$", "\\bvallarta\\b", "iztacihuatl",
-        "bahia de kino ii", "^apan", "^calak(mul)?$", "^matat$",
-        "^teziu$")
+        "^matat$", "\\bloma\\b", "^montemorelos$",
+        "^tampico madero$", "^queretaro conagua$", "^merida conagua$")
     for (x in no.matches)
         match.i[str_detect(l$seen, x)] = NA
 
