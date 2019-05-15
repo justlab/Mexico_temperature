@@ -281,7 +281,7 @@ get.ground.raw.smn.observatories = function()
 
     # Read in the the giant CSV of hourly observations.
     whole = fread(cmd = paste("unzip -p", shQuote(stpath(
-        "simat-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
+        "smn-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
     setnames(whole, colnames(whole),
         gsub("-", "_", colnames(whole), fixed = T))
     setnames(whole,
@@ -297,7 +297,7 @@ get.ground.raw.smn.observatories = function()
     # variable names.
     variable.codes = fread(paste(collapse = "\n", sub("\t\t", "\t", local(
        {o = file(encoding = "Windows-1252", stpath(
-            "simat-raw", "OBS_2018",
+            "smn-raw", "OBS_2018",
             "ELEMENTOS_HORARIOS_OBSERVATORIOS.txt"))
         x = readLines(o, warn = F)
         close(o)
@@ -326,7 +326,7 @@ get.ground.raw.smn.observatories = function()
 
     # Collect stations.
     stations = as.data.table(read_excel(stpath(
-        "simat-raw", "OBS_2018", "Claves_Observatorios.xlsx")))
+        "smn-raw", "OBS_2018", "Claves_Observatorios.xlsx")))
     stations = stations[!is.na(CLAVE), .(
         stn = as.integer(CLAVE),
         lon = -(LONG + LONM/60 + ifelse(is.na(LONS), 0, LONS/(60*60))),
@@ -349,8 +349,8 @@ get.ground.raw.smn.emas = pairmemo(get.ground.raw.smn.emas, pairmemo.dir)
 read.es = function(emas = F)
    {fnames = list.files(
        (if (emas)
-           stpath("simat-emas-csv") else
-           stpath("simat-raw", "ESIMEs_2018")),
+           stpath("smn-emas-csv") else
+           stpath("smn-raw", "ESIMEs_2018")),
        full.names = T)
 
     if (!emas)
@@ -505,7 +505,7 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
 es.stations = function(obs, emas = F)
    {stations = as.data.table(download(
         "http://web.archive.org/web/20180809001831id_/http://smn1.conagua.gob.mx/emas/catalogoa.html",
-        "simat_es_stations.html",
+        "smn_es_stations.html",
         function(fname)
             readHTMLTable(fname,
                 encoding = "Windows-1258",

@@ -11,7 +11,7 @@ We use several sources of data:
 
   - SMN: The Servicio Meteorológico Nacional México (SMN), which includes an apparently unnamed network of observatories (contact person: Adolfo Portocarrero Reséndiz; adolfo.portocarrero@conagua.gob.mx; (55) 2636-4600; Av. Observatorio 192, Col. Observatorio, Del. Miguel Hidalgo. C.P. 11860, México). It also includes the Estación Sinóptica Meteorológica (ESIMEs) network and the Estación Meteorológica Automática (EMAs) network (contact person: Lic. Moisés Espinosa Cárdenas; moises.espinosa@conagua.gob.mx; 01-(55)-26-36-46-00 extension 3484).
 
-      - Since R's ``readxl`` package has difficulty with the EMAs Excel files, I use LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 --max-procs 10 soffice --headless --convert-to csv --outdir /data-belle/Mexico_temperature/stations/converted-csv )``. This took about 1 hour 45 min on Belle.
+      - Since R's ``readxl`` package has difficulty with the EMAs Excel files, I use LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 --max-procs 10 soffice --headless --convert-to csv --outdir /data-belle/Mexico_temperature/stations/smn-emas-csv )``. This took about 1 hour 45 min on Belle.
 
 - Files from Weather Underground can be downloaded or obtained from archives of previous downloads.
 
