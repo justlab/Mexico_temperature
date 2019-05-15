@@ -171,96 +171,100 @@ get.ground.raw.simat = pairmemo(get.ground.raw.simat, pairmemo.dir)
 
 get.ground.raw.unam = function()
    {url.root = "http://www.ruoa.unam.mx/pembu/Estaciones"
-    stns = c("CCA", paste0("ENP", 1:9), paste0("CCH", c("A", "N", "O", "S", "V")))
+
+    query = as.data.table(expand.grid(
+        stn = c("CCA", paste0("ENP", 1:9), paste0("CCH", c("A", "N", "O", "S", "V"))),
+        dyear = year(earliest.date) : (year(Sys.Date()) - 1)))
+    query = query[!(stn == "CCA" & dyear < 2007)]
+      # CCA observations start on this year.
+
     stations = data.table()
     message("Loading UNAM")
-    obs = unique(rbindlist(unlist(rec = F, pblapply(stns, function(stn.nominal)
-      # The station is "nominal" in the sense that files for one
-      # station can have observations that are stated inside the file
-      # to come from a different station.
-       {years = (
-            (if (stn.nominal == "CCA") 2007 else year(earliest.date)) :
-              # CCA observations start on this year.
-            (year(Sys.Date()) - 1))
-        unlist(rec = F, lapply(years, function(dyear)
-           {files = download(
-                sprintf("%s/%s/datos/%s/%d_%s.zip",
-                    url.root, tolower(stn.nominal), stn.nominal, dyear, stn.nominal),
-                sprintf("unam/%d_%s.zip", dyear, stn.nominal),
-                function(path)
-                   {filetype = system2("file", c("-b", path), stdout = T)
-                    if (!grepl("Zip", filetype))
-                      # We actually got an error page, but HTTP 200
-                      # was returned anyway.
-                        return(NULL)
-                    fnames = unzip(path, list = T)$Name
-                    if (length(fnames) > 3 && length(fnames) <= 14)
-                        unname(slurp.zip(path))
-                    else
-                      # XTRA
-                        NULL})
-            if (is.null(files))
-                return(data.table())
+    obs = unique(rbindlist(unlist(rec = F, pblapply(1 : nrow(query), function(qi)
+       {stn.nominal = query[qi, stn]
+        dyear = query[qi, dyear]
+          # The station is "nominal" in the sense that files for one
+          # station can have observations that are stated inside the file
+          # to come from a different station.
 
-            # Sometimes, files seem to consist of multiple CSV
-            # files squished together, so break them apart.
-            # Other files are empty, so filter them out.
-            files = unlist(lapply(files, function(text)
-                if (str_length(text))
-                    str_split(text, "\nPrograma de Estaciones")[[1]]
+        files = download(
+            sprintf("%s/%s/datos/%s/%d_%s.zip",
+                url.root, tolower(stn.nominal), stn.nominal, dyear, stn.nominal),
+            sprintf("unam/%d_%s.zip", dyear, stn.nominal),
+            function(path)
+               {filetype = system2("file", c("-b", path), stdout = T)
+                if (!grepl("Zip", filetype))
+                  # We actually got an error page, but HTTP 200
+                  # was returned anyway.
+                    return(NULL)
+                fnames = unzip(path, list = T)$Name
+                if (length(fnames) > 3 && length(fnames) <= 14)
+                    unname(slurp.zip(path))
                 else
-                    character(0)))
+                  # XTRA
+                    NULL})
+        if (is.null(files))
+            return(list(data.table()))
 
-            lapply(files, function(text)
-               {stopifnot(str_match(text, mlr("^Horario (\\S+)"))[,2]
-                    == "UTC-6h")
+        # Sometimes, files seem to consist of multiple CSV
+        # files squished together, so break them apart.
+        # Other files are empty, so filter them out.
+        files = unlist(lapply(files, function(text)
+            if (str_length(text))
+                str_split(text, "\nPrograma de Estaciones")[[1]]
+            else
+                character(0)))
 
-                stn.name = str_replace_all(
-                    str_match(text, mlr("^Estacion (.+?)-UNAM,Ciudad de Mexico"))[,2],
-                    "\\s+", "")
-                if (stn.name == "CCH0")
-                    stn.name = "CCHO"
-                if (stn.name == "ENP4")
-                  # This station sometimes has more than one observation for the
-                  # same time with different values (e.g., compare
-                  # "2007/10/31 08:00:00" in
-                  #     2007_ENP4.zip/2007-ENP4-L1/2007-10-ENP4-L1.CSV
-                  # to the same row in
-                  #     2007_CCA.zip/2007-CCA-L1/2007-10-CCA-L1.CSV
-                  # .) Let's ignore it.
-                    return(data.table())
-                latlon = str_match(text, mlr("^Lat ([0-9.]+) N, Lon ([0-9.]+) W"))
-                station = data.table(
-                    stn.name = stn.name,
-                    lon = -as.numeric(latlon[,3]),
-                    lat = as.numeric(latlon[,2]))
-                stations <<- unique(rbind(stations, station))
-                stn = stations[, which(
-                    stn.name == station$stn.name &
-                    lon == station$lon &
-                    lat == station$lat)]
+        lapply(files, function(text)
+           {stopifnot(str_match(text, mlr("^Horario (\\S+)"))[,2]
+                == "UTC-6h")
 
-                d = fread(
-                    str_sub(text, str_locate(text, mlr("^[0-9]{4}/"))[,1]),
-                    col.names = str_split(str_extract(text, mlr("^Fecha_hora,.+")), ",")[[1]],
-                    na.strings = "null")
+            stn.name = str_replace_all(
+                str_match(text, mlr("^Estacion (.+?)-UNAM,Ciudad de Mexico"))[,2],
+                "\\s+", "")
+            if (stn.name == "CCH0")
+                stn.name = "CCHO"
+            if (stn.name == "ENP4")
+              # This station sometimes has more than one observation for the
+              # same time with different values (e.g., compare
+              # "2007/10/31 08:00:00" in
+              #     2007_ENP4.zip/2007-ENP4-L1/2007-10-ENP4-L1.CSV
+              # to the same row in
+              #     2007_CCA.zip/2007-CCA-L1/2007-10-CCA-L1.CSV
+              # .) Let's ignore it.
+                return(data.table())
+            latlon = str_match(text, mlr("^Lat ([0-9.]+) N, Lon ([0-9.]+) W"))
+            station = data.table(
+                stn.name = stn.name,
+                lon = -as.numeric(latlon[,3]),
+                lat = as.numeric(latlon[,2]))
+            stations <<- unique(rbind(stations, station))
+            stn = stations[, which(
+                stn.name == station$stn.name &
+                lon == station$lon &
+                lat == station$lat)]
 
-                # Read dates, and drop illegal dates like September 31st.
-                d[, date := as.Date(Fecha_hora)]
-                d = d[!is.na(date)]
+            d = fread(
+                str_sub(text, str_locate(text, mlr("^[0-9]{4}/"))[,1]),
+                col.names = str_split(str_extract(text, mlr("^Fecha_hora,.+")), ",")[[1]],
+                na.strings = "null")
 
-                d = d[, by = date, .(
-                    stn = stn,
-                    temp.C.mean = if.enough.halfhourly(mean, Temp),
-                    temp.C.max = if.enough.halfhourly(max, Temp),
-                    temp.C.min = if.enough.halfhourly(min, Temp),
-                    wind.speed.sustained.mps.mean = if.enough.halfhourly(mean, Rapidez_v_sostenido),
-                    wind.speed.gust.mps.mean = if.enough.halfhourly(mean, Rapidez_rachas),
-                    relative.humidity.percent.mean = if.enough.halfhourly(mean, Hum_Rel),
-                    pressure.hPa.mean = if.enough.halfhourly(mean, Presion_bar))]
-                # Drop rows that are missing on all the data columns.
-                vnames = setdiff(colnames(d), c("date", "stn"))
-                d[rowSums(!is.na(d[, mget(vnames)])) > 0]})}))}))))
+            # Read dates, and drop illegal dates like September 31st.
+            d[, date := as.Date(Fecha_hora)]
+            d = d[!is.na(date)]
+
+            d = d[, by = date, .(
+                stn = stn,
+                temp.C.mean = if.enough.halfhourly(mean, Temp),
+                temp.C.max = if.enough.halfhourly(max, Temp),
+                temp.C.min = if.enough.halfhourly(min, Temp),
+                wind.speed.sustained.mps.mean = if.enough.halfhourly(mean, Rapidez_v_sostenido),
+                wind.speed.gust.mps.mean = if.enough.halfhourly(mean, Rapidez_rachas),
+                relative.humidity.percent.mean = if.enough.halfhourly(mean, Hum_Rel),
+                pressure.hPa.mean = if.enough.halfhourly(mean, Presion_bar))]
+            # Drop rows that are missing on all the data columns.
+            vnames = setdiff(colnames(d), c("date", "stn"))
+            d[rowSums(!is.na(d[, mget(vnames)])) > 0]})}))))
 
     stations[, stn := .I]
     punl(stations, obs)}
