@@ -723,8 +723,12 @@ get.ground.raw = function()
     obs = rbindlist(fill = T, lapply(networks, function(x)
         x$obs))
 
+    # Drop stations with no observations.
+    stations = stations[stn %in% obs$stn]
+
     stopifnot(!anyNA(obs$date))
     stopifnot(!anyNA(obs$stn))
+    stopifnot(is.subset(unique(obs$stn), stations$stn))
     stopifnot(nrow(unique(obs[, .(stn, date)])) == nrow(obs))
 
     # Convert units.
