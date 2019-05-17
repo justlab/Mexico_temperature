@@ -686,9 +686,9 @@ get.ground.raw.wunderground = function()
             max_temperature as 'temp.F.max',
             min_temperature as 'temp.F.min',
             temperature as 'temp.F.mean',
-            precip_today,
-            wind_speed,
-            pressure
+            precip_today as `precipitation.inch.total`,
+            wind_speed as `wind.speed.miles.per.hour.mean`,
+            pressure as `pressure.inHg.mean`
         from Daily"))
     dbDisconnect(db)
     obs[, date := as.Date(as.character(date), format = "%Y%m%d")]
@@ -735,7 +735,11 @@ get.ground.raw = function()
     for (unit in list(
             list(from = "F", to = "C"),
             list(from = "mmHg", to = "hPa"),
-            list(from = "kmph", to = "mps")))
+            list(from = "inHg", to = "hPa"),
+            list(from = "kmph", to = "mps"),
+            list(from = "kmph", to = "mps"),
+            list(from = "miles.per.hour", to = "mps"),
+            list(from = "inch", to = "mm")))
        {reg = sprintf("\\.%s\\.(mean|min|max|total)$", unit$from)
         cn = copy(colnames(obs))
         for (col.from in cn)
@@ -744,8 +748,10 @@ get.ground.raw = function()
                     sprintf(".%s.\\1", unit$to))
                 obs[, (col.to) := ifelse(is.na(get(col.to)),
                     (if (unit$from == "kmph" && unit$to == "mps")
-                        conv_multiunit(get(col.from), "km / hr", "m / sec") else
-                        conv_unit(get(col.from), unit$from, unit$to)),
+                            conv_multiunit(get(col.from), "km / hr", "m / sec") else
+                        if (unit$from == "miles.per.hour" && unit$to == "mps")
+                            conv_multiunit(get(col.from), "mi / hr", "m / sec") else
+                            conv_unit(get(col.from), unit$from, unit$to)),
                     get(col.to))]
                 obs[, (col.from) := NULL]}}
 
