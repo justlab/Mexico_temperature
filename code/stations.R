@@ -21,7 +21,7 @@ wunderground.db.path = "/data-belle/wunderground/wunderground-daily-mexico.sqlit
 
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
-hourly.vals.required = 18  # I.e., 3/4 of the day.
+proportion.of.day.required = .75
 
 # In the output, all dates signify UTC-06:00 (except for Wunderground).
 target.tz = "Etc/GMT+6"
@@ -63,7 +63,7 @@ mlr = function(...)
     regex(..., multiline = T)
 
 if.enough.halfhourly = function(f, vals)
-   {if (sum(!is.na(vals)) >= 2*hourly.vals.required)
+   {if (sum(!is.na(vals)) >= (24*2) * proportion.of.day.required)
        f(vals, na.rm = T)
     else
        NA_real_}
@@ -71,11 +71,16 @@ if.enough.halfhourly = function(f, vals)
 daily.summary = function(d, freq, variable.name)
    {d = d[!is.na(value)]
     stopifnot(!anyNA(d))
-    vals.required = (
-        if (freq == "hour") hourly.vals.required else
-        if (freq == "half hour") 2*hourly.vals.required else
-        if (freq == "10 min") 6*hourly.vals.required else stop())
+
+    max.vals.per.day =
+       (if (freq == "hour") 24 else
+        if (freq == "half hour") 24*2 else
+        if (freq == "10 min") (24*60)/10 else stop())
+    vals.required = max.vals.per.day * proportion.of.day.required
+    stopifnot(vals.required == round(vals.required))
+
     d = d[, by = .(date, stn),
+      {stopifnot(.N <= max.vals.per.day)
        if (.N >= vals.required)
           {if (variable.name == "temp.C")
                .(
@@ -85,7 +90,7 @@ daily.summary = function(d, freq, variable.name)
            else if (variable.name == "precipitation.mm")
                 .(precipitation.mm.total = sum(value))
            else
-                .(value.mean = mean(value))}]
+                .(value.mean = mean(value))}}]
     if ("value.mean" %in% names(d))
         setnames(d, "value.mean", paste0(variable.name, ".mean"))
     d}
@@ -351,7 +356,9 @@ get.ground.raw.smn.emas = function()
 get.ground.raw.smn.emas = pairmemo(get.ground.raw.smn.emas, pairmemo.dir)
 
 read.es = function(emas = F)
-   {fnames = list.files(
+   {message("Loading SMN ", (if (emas) "EMAs" else "ESIMEs"))
+
+    fnames = list.files(
        (if (emas)
            stpath("smn-emas-csv") else
            stpath("smn-raw", "ESIMEs_2018")),
@@ -412,6 +419,25 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
         if (!nrow(d))
             return(d)
 
+        if (fname %in% c(
+                "ESIME Aguascalientes 2006.xlsx",
+                  # This file has repeated DateTimes with
+                  # distinct temperatures.
+                "ESIME Tepehuanes 2017.xlsx"))
+                  # This file only has measurements from earlier
+                  # years, which don't match what's in the
+                  # earlier years' files.
+            return(data.table())
+
+        if (!emas)
+          # For ESIMEs, skip any file that appears to contains more
+          # than one station, because we rely on the file name to
+          # determine the station name.
+           {stn.col = str_subset(colnames(d), "^(Estaci.+?n|Station)$")
+            stopifnot(length(stn.col) == 1)
+            if (length(unique(d[[stn.col]])) > 1)
+                return(data.table())}
+
         if (emas &&
                 !is.subset(c("fecha", "TempAire", "RapViento", "HumRelativa", "PresBarometric", "Precipitacion", "nombre_estacion"), colnames(d)) &&
                 !is.subset(c("Date", "Time", "AvgTemp(C)", "AvgBP(mbar)", "AvgRh(%)", "WSK(kph)", "WSMK(kph)", "Rain(mm)"), colnames(d)))
@@ -448,6 +474,10 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
         else
             d[, stn := str_match(fname, "ESIME (.+) \\d{4} *\\.")[,2]]
 
+        # Skip an EMAs station with many repeated datetimes.
+        if (d$stn[1] == "acapo")
+            return(data.table())
+
         ifcol = function(...)
             for (col in c(...))
                 if (col %in% colnames(d))
@@ -455,27 +485,27 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                     if (is.character(v))
                         v = as.numeric(str_replace(v, fixed(","), "."))
                     return(v)}
-        d[, .(
+        d = d[, .(
             stn,
-            date = as.Date(tz = target.tz,
+            datetime =
               # Iván Gutiérrez-Avila says all timestamps are in UTC.
               # This is plausible given the observed temperatures.
                {if (is.character(DateTime))
-                   as.POSIXct(
-                       str_replace_all(DateTime, fixed("."), ""),
-                       format = (if (any(str_detect(DateTime, "\\d{8}")))
+                  {v = str_replace_all(tolower(DateTime), fixed("."), "")
+                   as.POSIXct(v,
+                       format = (if (any(str_detect(v, "\\d{8}")))
                            "%Y%m%d %H%M" else
                            paste(
-                               (if (any(str_detect(DateTime, "/(?:[2-3][0-9]|1[3-9])/")))
+                               (if (any(str_detect(v, "/(?:[2-3][0-9]|1[3-9])/")))
                                    "%m/%d/%Y" else
                                    "%d/%m/%Y"),
-                               (if (any(str_detect(DateTime, " P\\.?M")))
+                               (if (any(str_detect(v, " pm")))
                                    "%I:%M:%S %p" else
                                    "%H:%M:%S"))),
-                       tz = "UTC")
+                       tz = "UTC")}
                 else
                    {stopifnot(attr(DateTime, "tz") == "UTC")
-                    DateTime}}),
+                    DateTime}},
             temp.C = ifcol(
                 "ATC(C)", "TempAire", "AvgTemp(C)"),
             relative.humidity.percent = ifcol(
@@ -494,10 +524,31 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
             wind.speed.gust.kmph = ifcol("WSMK(kph)"),
             wind.speed.u.mps = ifcol("AvgWSU(m/s)"),
             wind.speed.v.mps = ifcol("AvgWSV(m/s)"),
-            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]})))
+            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]
 
+        # Keep only observations at the 10-minute intervals. I
+        # see other observations in only a few cases, and they're
+        # at weird times like 5 seconds past a 10-minute
+        # interval.
+        d[minute(datetime) %% 10 == 0 & second(datetime) == 0]})))
+
+    message("Intermediate processing")
+    d = unique(d)
+    # Drop rows that are missing on all the data columns.
+    vnames = setdiff(colnames(d), c("date", "datetime", "stn"))
+    d = d[rowSums(!is.na(d[, mget(vnames)])) > 0]
+    # Drop a single pesky partly duplicated observation.
+    d = d[!(stn == "la rumor" &
+       datetime == as.POSIXct(tz = "UTC", "2006-07-21 22:00:00") &
+       is.na(relative.humidity.percent))]
+    # We should now have only one observation per station and time.
+    stopifnot(all(d[, .N, by = .(stn, datetime)]$N == 1))
+    # Add dates.
+    d[, date := as.Date(datetime, tz = target.tz)]
+
+    message("Summarizing")
     combine.dailies(lapply(
-        setdiff(colnames(d), c("stn", "date")),
+        setdiff(colnames(d), c("stn", "date", "datetime")),
         function(vname)
             daily.summary(
                 d[, .(stn, date, value = get(vname))],
