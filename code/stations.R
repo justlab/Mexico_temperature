@@ -723,6 +723,10 @@ get.ground.raw = function()
     obs = rbindlist(fill = T, lapply(networks, function(x)
         x$obs))
 
+    stopifnot(!anyNA(obs$date))
+    stopifnot(!anyNA(obs$stn))
+    stopifnot(nrow(unique(obs[, .(stn, date)])) == nrow(obs))
+
     # Convert units.
     for (unit in list(
             list(from = "F", to = "C"),
