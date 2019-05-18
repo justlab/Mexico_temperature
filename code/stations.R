@@ -49,15 +49,9 @@ slurp.zip = function(path)
   # Extracts each file in the zip file at `path` as a single
   # string. The names of the resulting list are set to the inner
   # file names.
-   {lines = system2("unzip", c("-c", path), stdout = T)
-    is.sep = str_detect(lines, "^ (?: inflating|extracting): ")
-    chunks = lapply(
-        split(lines[!is.sep], cumsum(is.sep)[!is.sep])[-1],
-        function(chunk) paste(chunk, collapse = "\n"))
-    fnames = str_match(lines[is.sep], "^ (?: inflating|extracting): (.+)  $")
-    stopifnot(!anyNA(fnames))
-    names(chunks) = fnames[,2]
-    chunks}
+  # https://stackoverflow.com/a/56191644
+    sapply(unzip(path, list = T)$Name, simplify = F, function(x)
+        paste0(collapse = '\n', readr::read_file(unz(path, x))))
 
 mlr = function(...)
     regex(..., multiline = T)
