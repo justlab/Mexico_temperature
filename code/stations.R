@@ -1,7 +1,13 @@
+# The main entry point is `get.ground`.
+
 # The tag "XTRA" is used to mark places where I've omitted
 # support for certain rare formats of the station files. By adding
 # such support, one could process a few more files and hence get
 # a few more observations.
+
+## -----------------------------------------------------------
+## * Libraries and constants
+## -----------------------------------------------------------
 
 suppressPackageStartupMessages(
    {library(data.table)
@@ -30,6 +36,8 @@ target.tz = "Etc/GMT+6"
   # Yes, the sign is intepreted in the opposite fashion from usual.
 
 crs.lonlat = 4326
+
+spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 
 ## ------------------------------------------------------------
 ## * Subroutines
@@ -96,8 +104,6 @@ daily.summary = function(d, freq, variable.name)
 combine.dailies = function(l)
     Reduce(x = l, function(x, y)
         merge(x, y, all = T, by = c("stn", "date")))
-
-spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 
 rename.cols = function(d, originals, target)
    {matches = intersect(originals, colnames(d))
