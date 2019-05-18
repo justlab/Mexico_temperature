@@ -10,7 +10,9 @@ suppressPackageStartupMessages(
     library(DBI)
     library(stringr)
     library(measurements)
-    library(pbapply)})
+    library(pbapply)
+    library(sf)
+    library(nngeo)})
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
@@ -26,6 +28,8 @@ proportion.of.day.required = .75
 # In the output, all dates signify UTC-06:00 (except for Wunderground).
 target.tz = "Etc/GMT+6"
   # Yes, the sign is intepreted in the opposite fashion from usual.
+
+crs.lonlat = 4326
 
 ## ------------------------------------------------------------
 ## * Subroutines
@@ -103,6 +107,14 @@ rename.cols = function(d, originals, target)
 
 is.subset = function(needles, haystack)
     !length(setdiff(needles, haystack))
+
+study.area = function()
+   {b = st_bbox(st_transform(crs = crs.lonlat, st_read(quiet = T,
+        file.path(data.root, "mxcity_megalopolis"))))
+      # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
+    list(left = floor(unname(b$xmin)), right = ceiling(unname(b$xmax)),
+        bottom = floor(unname(b$ymin)), top = ceiling(unname(b$ymax)))}
+study.area = pairmemo(study.area, pairmemo.dir, mem = T)
 
 ## ------------------------------------------------------------
 ## * Per-network functions
@@ -690,8 +702,12 @@ get.ground.raw.wunderground = function()
     punl(stations, obs)}
 
 ## ------------------------------------------------------------
-## * Main entry point
+## * All-network functions
 ## ------------------------------------------------------------
+
+get.ground = function()
+   do.call(filter.raw, get.ground.raw())
+get.ground = pairmemo(get.ground, pairmemo.dir, mem = T)
 
 get.ground.raw = function()
    {networks = list(
@@ -750,4 +766,166 @@ get.ground.raw = function()
                 obs[, (col.from) := NULL]}}
 
     punl(stations, obs)}
-get.ground.raw = pairmemo(get.ground.raw, pairmemo.dir)
+
+min.obs = 100
+possible.duplicate.dist.meters = 2000
+min.common.days = 30
+max.proportion.equal = 1/10
+max.deviance.temp.Cdeg = 20
+
+# https://en.wikipedia.org/wiki/Climate_of_Mexico#Weather_records
+extreme.hi.temp.C = 53
+extreme.lo.temp.C = -30
+extreme.precipitation.mm = 1634
+# https://en.wikipedia.org/wiki/Atmospheric_pressure#Records
+extreme.hi.pressure.hPa = 1085
+extreme.lo.pressure.hPa = 869
+# https://en.wikipedia.org/wiki/Wind_speed
+extreme.wind.speed.mps = 114
+
+filter.raw = function(stations, obs, print.deviant.obs = F)
+   {status = function()
+       message(sprintf("Now at %s observations from %s stations",
+           format(nrow(obs), big.mark = ","),
+           format(nrow(stations), big.mark = ",")))
+    status()
+
+    message("Narrowing to study area")
+    stations = stations[stn %in% obs$stn &
+       lon >= study.area()$left & lon <= study.area()$right &
+       lat >= study.area()$bottom & lat <= study.area()$top]
+    obs = obs[stn %in% stations$stn]
+    status()
+
+    message("Removing stations with only a few observations")
+    obs = obs[, by = stn, if (.N >= min.obs) .SD]
+    stations = stations[stn %in% unique(obs$stn)]
+    status()
+
+    message("Removing station-days with absurd values")
+    local(
+       {absurd = obs[, .(
+            hot.max = temp.C.max >= extreme.hi.temp.C,
+            hot.avg = temp.C.mean >= extreme.hi.temp.C,
+            hot.min = temp.C.min >= extreme.hi.temp.C,
+            cold.max = temp.C.max <= extreme.lo.temp.C,
+            cold.avg = temp.C.mean <= extreme.lo.temp.C,
+            cold.min = temp.C.min <= extreme.lo.temp.C,
+            inconsistent = (temp.C.max < temp.C.min  |
+                temp.C.mean < temp.C.min |
+                temp.C.mean > temp.C.max),
+            wet = precipitation.mm.total >= extreme.precipitation.mm,
+            dry = precipitation.mm.total < 0,
+            # Ignore pressure for now.
+            # pressure.hPa.mean >= extreme.hi.pressure.hPa,
+            # pressure.hPa.mean <= extreme.lo.pressure.hPa,
+            fast = wind.speed.mps.mean >= extreme.wind.speed.mps,
+            slow = wind.speed.mps.mean < 0)]
+        absurd = absurd[, lapply(.SD, function(v)
+            ifelse(is.na(v), F, v))]
+        print(colSums(absurd))
+        obs <<- obs[rowSums(absurd) == 0]
+        stations <<- stations[stn %in% unique(obs$stn)]})
+    status()
+
+    # Compute per-station temperature precisions.
+    local(
+       {close.to = function(values, comparison)
+            mean(abs(values - comparison)) < .0001
+        precs = obs[, keyby = stn, .(prec =
+           {C = na.omit(unique(c(temp.C.max, temp.C.min)))
+            f = conv_unit(C, "C", "F")
+            if (close.to(C, round(C)))
+                "1 C"
+            else if (close.to(f, round(f)))
+                "1 F"
+            else if (close.to(C, round(C, 1)))
+                "0.1 C"
+            else if (close.to(f, round(f, 1)))
+                "0.1 F"
+            else if (close.to(C, round(C, 2)))
+                "0.01 C"
+            else if (close.to(f, round(f, 2)))
+                "0.01 F"
+            else
+                "other"})]
+        stations[, temp.prec := precs[.(stations$stn), prec]]})
+
+    # Get the station distance matrix.
+    stdist = units::drop_units(st_distance(st_as_sf(
+       stations,
+       coords = c("lon", "lat"), crs = crs.lonlat)))
+
+    message("Checking for duplicate stations (by max temperature)")
+    groups = cutree(h = possible.duplicate.dist.meters,
+        hclust(as.dist(stdist), method = "complete"))
+    for (gn in unique(groups))
+       {stns = stations[groups == gn, stn]
+        if (length(stns) == 1)
+            next
+
+        for (pair in combn(stns, 2, simp = F))
+           {common.dates = obs[by = date,
+                stn %in% pair & !is.na(temp.C.max) & !is.na(temp.C.min),
+                if (.N == length(pair)) 1]$date
+            if (length(common.dates) < min.common.days)
+                next
+
+            # Collect max temperatures.
+            temps = obs[by = date,
+                stn %in% pair & date %in% common.dates,
+                .(temp.max = temp.C.max)]
+            # Round them to the precision of the less precise of
+            # the two stations.
+            precs = stations[stn %in% pair, temp.prec]
+            temps[, temp.max := (
+                if (any(precs == "0.1 F"))
+                    round(10 * conv_unit(temp.max, "C", "F"))
+                else if (any(precs == "0.1 C"))
+                    round(10 * temp.max)
+                else if (all(precs == "0.01 C"))
+                    round(100 * temp.max)
+                else stop())]
+
+            # Are the rounded temperatures often equal?
+            proportion.equal = (temps
+                [, by = date, length(unique(temp.max)) == 1]
+                [, mean(V1)])
+            stopifnot(proportion.equal < max.proportion.equal)}}
+
+    message("Removing deviant stations (by temperature)")
+    # An observation is deviant if contemporaneous observations
+    # at the nearest two stations are both at least
+    # `max.deviance.temp.Cdeg` away. A station is deviant if it
+    # has any deviant observations.
+    stns.deviant = character()
+    local(for (temp.var in paste0("temp.C.", c("max", "min", "mean")))
+       {wide = dcast(obs, date ~ stn, value.var = temp.var)
+        dates = wide[, date]
+        wide = as.matrix(subset(wide, select = -date))[, stations$stn]
+
+        for (stn.i in 1 : nrow(stations))
+           {neighbors.i = order(stdist[stn.i,])[c(2, 3)]
+            deviance = pmin(
+                abs(wide[, stn.i] - wide[, neighbors.i[1]]),
+                abs(wide[, stn.i] - wide[, neighbors.i[2]]))
+            deviance[is.na(deviance)] = 0
+            bad = deviance > max.deviance.temp.Cdeg
+
+            if (print.deviant.obs)
+                for (date.i in which(bad))
+                    message(stations[stn.i, stn], " ", temp.var, " ",
+                        dates[date.i], " ",
+                        stations[neighbors.i[1], stn], " ",
+                        stations[neighbors.i[2], stn], " ",
+                        paste(collapse = ",",
+                            round(wide[date.i, c(stn.i, neighbors.i)])))
+
+            if (any(bad))
+                stns.deviant <<- unique(c(stns.deviant,
+                    stations[stn.i, stn]))}})
+    stations = stations[!(stn %in% stns.deviant)]
+    obs = obs[!(stn %in% stns.deviant)]
+    status()
+
+    punl(stations, obs)}
