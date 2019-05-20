@@ -3,7 +3,8 @@
 # The tag "XTRA" is used to mark places where I've omitted
 # support for certain rare formats of the station files. By adding
 # such support, one could process a few more files and hence get
-# a few more observations.
+# a few more observations (any number of which may not be in the
+# study area, anyway).
 
 ## -----------------------------------------------------------
 ## * Libraries and constants
@@ -300,7 +301,7 @@ get.ground.raw.smn.observatories = function()
 
     na.value = -99999
 
-    # Read in the the giant CSV of hourly observations.
+    # Read in the giant CSV of hourly observations.
     whole = fread(cmd = paste("unzip -p", shQuote(stpath(
         "smn-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
     setnames(whole, colnames(whole),
