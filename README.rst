@@ -4,8 +4,8 @@ We use several sources of data:
 
 - Files for these networks are automatically downloaded by ``stations.R``.
 
-  - SIMAT: The Sistema de Monitoreo Atmosférico de la Ciudad de México (SIMAT), which includes the Red de Meteorología y Radiación Solar (REDMET) and the Red de Depósito Atmosférico (REDDA).
-  - UNAM: The Programa de Estaciones Meteorológicas del Bachillerato Universitario (PEMBU) at the Universidad Nacional Autónoma de México (UNAM).
+  - SIMAT: The Sistema de Monitoreo Atmosférico de la Ciudad de México (SIMAT), which includes the Red de Meteorología y Radiación Solar (REDMET) and the Red de Depósito Atmosférico (REDDA). Website: http://www.aire.cdmx.gob.mx
+  - UNAM: The Programa de Estaciones Meteorológicas del Bachillerato Universitario (PEMBU) at the Universidad Nacional Autónoma de México (UNAM). Website: https://www.ruoa.unam.mx/pembu
 
 - Files from one family of networks have to be obtained in person, or by mailing a USB stick or hard drive. But information about ESIMEs and EMAs stations (specifically, their longitudes and latitudes) is automatically downloaded.
 
