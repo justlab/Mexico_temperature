@@ -754,7 +754,6 @@ get.ground.raw = function()
             list(from = "mmHg", to = "hPa"),
             list(from = "inHg", to = "hPa"),
             list(from = "kmph", to = "mps"),
-            list(from = "kmph", to = "mps"),
             list(from = "miles.per.hour", to = "mps"),
             list(from = "inch", to = "mm")))
        {reg = sprintf("\\.%s\\.(mean|min|max|total)$", unit$from)
