@@ -115,10 +115,13 @@ rename.cols = function(d, originals, target)
 is.subset = function(needles, haystack)
     !length(setdiff(needles, haystack))
 
-study.area = function()
-   {b = st_bbox(st_transform(crs = crs.lonlat, st_read(quiet = T,
-        file.path(data.root, "mxcity_megalopolis"))))
+pred.area = function()
+    st_read(quiet = T, file.path(data.root, "mxcity_megalopolis"))
       # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
+pred.area = pairmemo(pred.area, pairmemo.dir, mem = T)
+
+study.area = function()
+   {b = st_bbox(st_transform(crs = crs.lonlat, pred.area()))
     list(left = floor(unname(b$xmin)), right = ceiling(unname(b$xmax)),
         bottom = floor(unname(b$ymin)), top = ceiling(unname(b$ymax)))}
 study.area = pairmemo(study.area, pairmemo.dir, mem = T)
