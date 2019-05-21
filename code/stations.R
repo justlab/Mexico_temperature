@@ -41,6 +41,8 @@ crs.mexico.city = 6369 # https://epsg.io/6369
 
 spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 
+study.area.buffer.meters = 50e3
+
 ## ------------------------------------------------------------
 ## * Subroutines
 ## ------------------------------------------------------------
@@ -122,17 +124,16 @@ pred.area = function()
 pred.area = pairmemo(pred.area, pairmemo.dir, mem = T)
 
 study.area = function()
-   {b = st_bbox(st_transform(crs = crs.lonlat, pred.area()))
-    list(left = floor(unname(b$xmin)), right = ceiling(unname(b$xmax)),
-        bottom = floor(unname(b$ymin)), top = ceiling(unname(b$ymax)))}
+   {b = st_bbox(st_transform(crs = crs.lonlat,
+        st_buffer(pred.area(), study.area.buffer.meters)))
+    f = function(z) round(unname(z), 1)
+    list(left = f(b$xmin), right = f(b$xmax),
+        bottom = f(b$ymin), top = f(b$ymax))}
 study.area = pairmemo(study.area, pairmemo.dir, mem = T)
 
 in.study.area = function(lon, lat)
     lon >= study.area()$left & lon <= study.area()$right &
-    lat >= study.area()$bottom & lat <= study.area()$top &
-    # Cut off the bit of the Gulf of Mexico, where there's no
-    # elevation data.
-    !(lon > -97.38 & lat > 20.45)
+    lat >= study.area()$bottom & lat <= study.area()$top
 
 ## ------------------------------------------------------------
 ## * Per-network functions
