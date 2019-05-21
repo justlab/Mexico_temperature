@@ -126,6 +126,13 @@ study.area = function()
         bottom = floor(unname(b$ymin)), top = ceiling(unname(b$ymax)))}
 study.area = pairmemo(study.area, pairmemo.dir, mem = T)
 
+in.study.area = function(lon, lat)
+    lon >= study.area()$left & lon <= study.area()$right &
+    lat >= study.area()$bottom & lat <= study.area()$top &
+    # Cut off the bit of the Gulf of Mexico, where there's no
+    # elevation data.
+    !(lon > -97.38 & lat > 20.45)
+
 ## ------------------------------------------------------------
 ## * Per-network functions
 ## ------------------------------------------------------------
@@ -800,9 +807,7 @@ filter.raw = function(stations, obs, print.deviant.obs = F)
     status()
 
     message("Narrowing to study area")
-    stations = stations[stn %in% obs$stn &
-       lon >= study.area()$left & lon <= study.area()$right &
-       lat >= study.area()$bottom & lat <= study.area()$top]
+    stations = stations[in.study.area(lon, lat)]
     obs = obs[stn %in% stations$stn]
     status()
 
