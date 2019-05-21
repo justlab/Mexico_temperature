@@ -39,25 +39,21 @@ suppressPackageStartupMessages(
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
+c(get.ground, in.study.area, pred.area) %<-% local(
+   {source("stations.R", local = T)
+    list(get.ground, in.study.area, pred.area)})
+
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
-redmet.dir = "/data-belle/Mexico_temperature/redmet"
 elevation.path = "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst"
 
 plan(multiprocess)
 
 n.folds = 10
-available.years = 2003 : 2015
+available.years = 2003 : 2017
 master.grid.year = 2012L
   # This needs to be a year for which we have satellite vegetation
   # data, but the exact value shouldn't matter much.
-
-in.study.area = function(lon, lat)
-  # Use a rectangular area, except cut off a piece of ocean where
-  # there's no elevation data.
-    lon >= -100.9 & lon <= -96.1 &
-    lat >= 17.1 & lat <= 21.9 &
-    !(lon >= -97.15 & lat >= 20.75)
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 
@@ -86,51 +82,28 @@ get.nonsatellite.data = function()
     stopifnot(!anyNA(master.grid$elevation))
 
     message("Loading data from ground stations")
-    ground = readRDS("data/work/all_stations_final.rds")
+    stations = copy(get.ground()$stations)
+    ground = copy(get.ground()$obs)
+
     setnames(ground,
-        c("low.temp", "temp.mean", "hi.temp"),
+        c("temp.C.min", "temp.C.mean", "temp.C.max"),
         temp.ground.vars)
-    redmet = get.redmet()
-    # REDMET station numbers (`stn`) are 64-bit integers. Reduce
-    # them so we can use R integers.
-    redmet[, stn := as.integer(stn - min(stn)) + max(ground$stn) + 1L]
-    ground = rbind(
-        ground[, c(.(redmet = F), mget(c(
-            "date", "stn", "longitude", "latitude",
-            temp.ground.vars,
-            nontemp.ground.vars)))],
-        redmet[, c(.(redmet = T), mget(colnames(.SD)))])
-    # Most stations use m/s as the unit of wind speed, but some
-    # use km/hour. Convert those to m/s.
-    ground[stn >= 20002 & stn <= 20067,
-        wind.speed.mean := (wind.speed.mean * 1000) / 60^2]
-    # There are 39 cases in which we have more than one observation
-    # for a particular station and day (which all happen to be in 2013
-    # from station 76677). In each case, keep only the second of the
-    # two observations.
-    stopifnot(ground[, .N, by = .(date, stn)][N > 1, .N] == 39)
-    ground = ground[, head(.SD, 1), by = .(date, stn)]
-    setkey(ground, stn)
-    # Each station should have only one position.
-    stopifnot(all(
-        ground[, nrow(unique(.SD)), by = stn,
-           .SDcols = c("latitude", "longitude")]$V1
-        == 1))
-    set.mrows(ground, "longitude", "latitude")
+    setnames(ground, "wind.speed.mps.mean", "wind.speed.mean")
+    set.mrows(stations, "lon", "lat")
+    ground[, mrow := stations[.(ground$stn), mrow]]
 
     # Create a matrix `stns.by.dist` such that
     # `stns.by.dist[mrow,]` gives a vector of all stations
     # ordered by distance from `mrow`, with the closest first.
     message("Populating stns.by.dist")
     stns.by.dist = get.knnx(
-        as.matrix(unique(
-            ground[order(stn), .(longitude, latitude)])),
+        as.matrix(stations[order(stn), .(lon, lat)]),
         master.grid[, .(lon, lat)],
-        k = length(unique(ground$stn)))$nn.index
+        k = nrow(stations))$nn.index
     stns.by.dist = apply(stns.by.dist, 2, function(v)
-        sort(unique(ground$stn))[v])
+        sort(stations$stn)[v])
 
-    list(master.grid, ground, stns.by.dist)}
+    list(master.grid, ground, stations, stns.by.dist)}
 get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
 
 set.mrows = function(d, longitude.col, latitude.col)
@@ -141,39 +114,6 @@ set.mrows = function(d, longitude.col, latitude.col)
     stopifnot(all(in.study.area(x, y)))
     set(d, j = "mrow", value =
         get.knnx(master.grid[, .(lon, lat)], cbind(x, y), k = 1)$nn.index[,1])}
-
-get.redmet = function()
-  # Get data from the REDMET network of ground stations.
-  # The files are from http://www.aire.cdmx.gob.mx/default.php?opc=%27aKBhnmI=%27&opcion=Zw
-   {d = rbindlist(lapply(list.files(redmet.dir, pattern = "meteor", full.names = T), function(path)
-       {d = fread(cmd = paste("zcat", shQuote(path)))
-        setnames(d, sub("^id_", "cve_", colnames(d)))
-        stopifnot(identical(colnames(d), c(
-            "date", "cve_station", "cve_parameter", "value", "unit")))
-        d[, unit := NULL]
-        d = dcast(d, date + cve_station ~ cve_parameter)
-        ifenough = function(v, then)
-          # Only use a vector of hourly values if at least 18 out of
-          # 24 hours are included.
-            if (sum(!is.na(v)) >= 18) then else NA_real_
-        d[,
-            .(
-                ground.temp.lo = ifenough(TMP, min(TMP, na.rm = T)),
-                ground.temp.mean = ifenough(TMP, mean(TMP, na.rm = T)),
-                ground.temp.hi = ifenough(TMP, max(TMP, na.rm = T)),
-                wind.speed.mean = ifenough(WSP, mean(WSP, na.rm = T))),
-            by = .(date = as.Date(date, "%d/%m/%Y"), cve_station)]}))
-    stations = fread(file.path(redmet.dir, "cat_estacion.csv"),
-        encoding = "Latin-1", skip = 1)
-    stopifnot(identical(colnames(stations), c(
-        "cve_estac", "nom_estac", "longitud", "latitud", "alt",
-        "obs_estac", "id_station")))
-    stopifnot(all(d$cve_station %in% stations$cve_estac))
-    d = merge(d,
-        stations[, .(cve_estac, longitud, latitud, id_station)],
-        by.x = "cve_station", by.y = "cve_estac")
-    d[, .(date, stn = id_station, longitude = longitud, latitude = latitud,
-        ground.temp.lo, ground.temp.mean, ground.temp.hi, wind.speed.mean)]}
 
 get.satellite.data = function(satellite, product, the.year)
    {stopifnot(satellite %in% c("terra", "aqua"))
@@ -514,10 +454,9 @@ summarize.cv.results = function(multirun.output)
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
     d[, season := months2seasons[
         month(as.Date(paste0(year, "-01-01")) + yday)]]
-    idist = 1 / as.matrix(dist(unique(
-        ground[order(stn), .(latitude, longitude)])))
+    idist = 1 / as.matrix(dist(stations[, .(lon, lat)]))
     diag(idist) = 0
-    ustns = unique(ground$stn)
+    ustns = stations$stn
     j1 = quote(.(.N, stn = length(unique(stn)),
         sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
@@ -629,4 +568,4 @@ predict.temps = function(file)
         temperature.hi = ground.temp.hi)]}
 predict.temps = pairmemo(predict.temps, pairmemo.dir, mem = T, fst = T)
 
-c(master.grid, ground, stns.by.dist) %<-% get.nonsatellite.data()
+c(master.grid, ground, stations, stns.by.dist) %<-% get.nonsatellite.data()
