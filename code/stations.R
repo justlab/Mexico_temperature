@@ -885,10 +885,10 @@ filter.raw = function(stations, obs, print.deviant.obs = F)
             # the two stations.
             precs = stations[stn %in% pair, temp.prec]
             temps[, temp.max := (
-                if (any(precs == "0.1 F"))
-                    round(10 * conv_unit(temp.max, "C", "F"))
-                else if (any(precs == "0.1 C"))
+                if (any(precs == "0.1 C"))
                     round(10 * temp.max)
+                else if (any(precs == "0.1 F"))
+                    round(10 * conv_unit(temp.max, "C", "F"))
                 else if (all(precs == "0.01 C"))
                     round(100 * temp.max)
                 else stop())]
