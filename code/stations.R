@@ -36,7 +36,8 @@ proportion.of.day.required = .75
 target.tz = "Etc/GMT+6"
   # Yes, the sign is intepreted in the opposite fashion from usual.
 
-crs.lonlat = 4326
+crs.lonlat = 4326 # https://epsg.io/4326
+crs.mexico.city = 6369 # https://epsg.io/6369
 
 spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 

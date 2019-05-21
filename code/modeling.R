@@ -32,6 +32,7 @@ suppressPackageStartupMessages(
     library(lme4)
     library(optimx)
     library(ape)
+    library(sf)
     library(future.apply)
     library(zeallot)
     library(caret)})
@@ -39,9 +40,9 @@ suppressPackageStartupMessages(
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
 
-c(get.ground, in.study.area, pred.area) %<-% local(
+c(get.ground, in.study.area, pred.area, crs.lonlat, crs.mexico.city) %<-% local(
    {source("stations.R", local = T)
-    list(get.ground, in.study.area, pred.area)})
+    list(get.ground, in.study.area, pred.area, crs.lonlat, crs.mexico.city)})
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
@@ -71,6 +72,15 @@ get.nonsatellite.data = function()
       in.study.area(x, y),
       .(lon = x, lat = y)]
     stopifnot(nrow(unique(master.grid)) == nrow(master.grid))
+    # Determine which rows of the master grid are in the prediction
+    # area.
+    message("Finding prediction area")
+    master.grid[, in.pred.area := local(
+      {mg = st_transform(crs = crs.mexico.city,
+           st_as_sf(master.grid, coords = c("lon", "lat"), crs = crs.lonlat))
+       pa = st_transform(crs = crs.mexico.city, pred.area())
+       sti = st_intersects(mg, pa, sparse = F)
+       rowSums(sti) > 0})]
 
     message("Loading elevation")
     # Read from fst files produced by `prepare_elevation_mex.Rmd`.
@@ -292,17 +302,21 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     if (nonmissing.ground.temp)
       # Split the ground stations into cross-validation folds. This
       # has to be done on a per-year basis because not all stations
-      # are present in all cases.
+      # are present in all cases. Only stations that are in the
+      # prediction area get a fold; other stations are always
+      # used for training (their fold is set to -1).
       #
       # The actual number of folds will be less than `n.folds` if
       # there aren't at least `n.folds` stations.
        {message("Choosing cross-validation folds")
         set.seed(the.year)
-        stns = sort(na.omit(unique(d$stn)))
+        stns = setdiff(sort(na.omit(unique(d$stn))),
+            stations[master.grid[stations$mrow, !in.pred.area], stn])
         stn.folds = data.table(key = "stn",
             stn = stns,
             fold = sample(rep(1 : n.folds, len = length(stns))))
-        d = merge(d, stn.folds, by = "stn", all = T)}
+        d = merge(d, stn.folds, by = "stn", all = T)
+        d[is.na(fold), fold := -1]}
     else
         d$fold = NA
 
@@ -450,7 +464,7 @@ months2seasons = factor(c(
     "ColdDry")) # Dec
 
 summarize.cv.results = function(multirun.output)
-   {d = copy(multirun.output)
+   {d = multirun.output[fold != -1]
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
     d[, season := months2seasons[
         month(as.Date(paste0(year, "-01-01")) + yday)]]
