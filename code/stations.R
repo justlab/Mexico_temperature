@@ -942,4 +942,13 @@ filter.raw = function(stations, obs, print.deviant.obs = F)
     obs = obs[!(stn %in% stns.deviant)]
     status()
 
+    # Replace station identifiers with simple integers, and put
+    # stations and observations in a logical order.
+    stations[, name := stn]
+    stations = stations[order(network, name, lon, lat)]
+    stations[, stn := .I]
+    setkey(stations, stn)
+    obs[, stn := stations[, keyby = name, stn][.(obs$stn), stn]]
+    obs = obs[order(stn, date)]
+
     punl(stations, obs)}
