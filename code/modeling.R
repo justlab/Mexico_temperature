@@ -157,7 +157,7 @@ get.satellite.data = function(satellite, product, the.year)
         d = rbindlist(future_lapply(vegetation.paths(satellite, the.year), function(fpath)
            {d = read.vegetation.file(fpath)
 
-            d = d[!is.na(ndvi) & in.study.area(x, y)]
+            d = d[in.study.area(x, y)]
             set.mrows(d, "x", "y")
             d[, `:=`(x = NULL, y = NULL)]
 
@@ -200,7 +200,9 @@ read.vegetation.file = function(fpath, full.grid = F)
         gi = paste(gdalinfo(subdataset), collapse = " ")
         scale.factor = as.numeric(regmatches(gi,
             regexec(" scale_factor=(\\d+)", gi))[[1]][2])
-        d$ndvi = d$ndvi / scale.factor^2}
+        d$ndvi = d$ndvi / scale.factor^2
+        # Missing points have already been thrown out.
+        stopifnot(!anyNA(d))}
     d}
 
 mrow.sets = list()
@@ -255,7 +257,13 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
             sv = get.satellite.data(satellite, "vegetation", the.year)
             message("Merging in ", satellite, " NDVI")
             d = merge(d, sv, by = c("mrow", "month"), all.x = T)
-            stopifnot(!anyNA(d$ndvi))
+            # Very rarely, NDVI is missing. In such cases, set it
+            # to the mean of nonmissing values on that month.
+            if (anyNA(d$ndvi))
+               {message("Imputing ", sum(is.na(d$ndvi)), " missing values")
+                d[, by = month, ndvi := ifelse(is.na(ndvi),
+                     mean(ndvi, na.rm = T),
+                     ndvi)]}
             setnames(d, "ndvi", paste0(satellite, ".ndvi"))}
         d})
 
