@@ -288,8 +288,7 @@ get.ground.raw.unam = function()
                 temp.C.mean = if.enough.halfhourly(mean, Temp),
                 temp.C.max = if.enough.halfhourly(max, Temp),
                 temp.C.min = if.enough.halfhourly(min, Temp),
-                wind.speed.sustained.mps.mean = if.enough.halfhourly(mean, Rapidez_v_sostenido),
-                wind.speed.gust.mps.mean = if.enough.halfhourly(mean, Rapidez_rachas),
+                wind.speed.mps.mean = if.enough.halfhourly(mean, Rapidez_v_sostenido),
                 relative.humidity.percent.mean = if.enough.halfhourly(mean, Hum_Rel),
                 pressure.hPa.mean = if.enough.halfhourly(mean, Presion_bar))]
             # Drop rows that are missing on all the data columns.
@@ -542,13 +541,11 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
               # The unit for "Precipitacion" is a guess based on other
               # EMAs files.
             wind.speed.mps = ifcol("WS(m/s)"),
-            wind.speed.kmph = ifcol("RapViento"),
+            wind.speed.kmph = ifcol("WSK(kph)", "RapViento"),
               # The unit for RapViento is a guess based on the units
               # for other EMAs files.
-            wind.speed.sustained.kmph = ifcol("WSK(kph)"), 
-            wind.speed.gust.kmph = ifcol("WSMK(kph)"),
-            wind.speed.u.mps = ifcol("AvgWSU(m/s)"),
-            wind.speed.v.mps = ifcol("AvgWSV(m/s)"),
+              # XTRA: there are also some files with wind speed *u* vs.
+              # wind speed *v* ("AvgWSU(m/s)", "AvgWSV(m/s)").
             pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]
 
         # Keep only observations at the 10-minute intervals. I
