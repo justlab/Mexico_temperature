@@ -339,7 +339,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
-impute.nontemp.ground.vars = function(d.orig, fold.i)
+impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F)
   # For each ground-station variable (other than the DV,
   # temperature), substitute values that are missing or are
   # currently in the test fold. We use the nearest station
@@ -352,7 +352,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
     ustn = as.character(unique(d.orig$stn))
 
     for (vname in nontemp.ground.vars)
-       {column = d[[vname]]
+       {column = d[, get(vname)]
 
         # Create `other.vs` (and likewise `other.folds`) such that
         # `other.vs[[stn]][yday]` gives the value of `vname` at
@@ -370,6 +370,8 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
 
         # Now look at each value of `column` in turn to see if it
         # needs a substitute.
+        if (progress)
+            bar = txtProgressBar(min = 0, max = length(column), style = 3)
         for (ri in seq_along(column))
            {if ((!is.null(fold.i) && folds[ri] == fold.i) ||
                     is.na(column[ri]))
@@ -385,9 +387,11 @@ impute.nontemp.ground.vars = function(d.orig, fold.i)
                     if (found)
                         break}
                 if (!found)
-                    stop("No match found for ", fold.i, " ", ri, " ", vname)}}
+                    stop("No match found for ", fold.i, " ", ri, " ", vname)}
+            if (progress) setTxtProgressBar(bar, ri)}
+        if (progress) close(bar)
 
-        d[[vname]] = column}
+        d[, (vname) := column]}
 
     d}
 
@@ -545,64 +549,32 @@ summarize.cv.results = function(multirun.output)
                     by = .(year, dv, season)]
                 [, .("Moran p" = V1)]))}
 
-dedupe.mrow.days = function(d)
-  # There are some `mrows` that have more than one
-  # station, but we want to look up some data frames by
-  # `mrow`. So just keep the first station per `mrow` and
-  # day.
-    d[, head(.SD, 1), by = .(mrow, yday)]
+predict.temps = function(the.year, mrow.set)
+  # Predict a low, mean, and high temperature for every cell in
+  # `mrow.set` and day in `the.year`.
+   {d = model.dataset(the.year, nonmissing.ground.temp = T)
+    d = rbind(
+        d,
+        model.dataset(the.year, mrow.set = mrow.set)[
+            !(paste(mrow, yday) %in% d[, paste(mrow, yday)])])
+    d[, ground.temp := NA_real_]
 
-predict.temps = function(file)
-  # Predict a low, mean, and high temperature for each location
-  # and date.
-   {orig = readRDS(file)
-    d.query = with(orig, data.table(date = day, lon = long48, lat = lat48))
+    message("Imputing non-temperature ground variables")
+    d = impute.nontemp.ground.vars(d, fold.i = NULL, progress = T)
 
-    message("Setting mrows")
-    set.mrows(d.query, "lon", "lat")
+    for (dvname in temp.ground.vars)
+       {message("Training for ", dvname)
+        d[, ground.temp := get(dvname)]
+        f.pred = train.model(d[!is.na(ground.temp)])
+        message("Predicting ", dvname)
+        d[, paste0("pred.", dvname) := f.pred(.SD)]}
 
-    f = function(slice)
-       {the.year = slice[1, year(date)]
-
-        # Construct `d.model` to contain to have a row for each time
-        # (`yday`) and place (`mrow`) that either:
-        # - has a non-missing ground temperature (used for training)
-        # - is present in `slice` (used for prediction)
-        mrow.sets[[paste(file, the.year)]] <<- sort(unique(slice$mrow))
-        d.model = model.dataset(the.year, nonmissing.ground.temp = T)
-        d.model = rbind(d.model,
-            model.dataset(the.year, mrow.set = paste(file, the.year))[
-                paste(mrow, yday) %in% slice[, paste(mrow, yday(date))] &
-                !(paste(mrow, yday) %in% d.model[, paste(mrow, yday)])])
-        d.model[, ground.temp := NA_real_]
-        setkey(d.model, stn, yday)
-        message("Imputing non-temperature ground variables for ", the.year)
-        d.model = impute.nontemp.ground.vars(d.model, fold.i = NULL)
-        setkey(d.model, mrow, yday, stn)
-
-        # If for a given `mrow` and day we have an actual ground
-        # measurement, we'll use that instead of the model prediction.
-        gr = ground[year(date) == the.year]
-        gr[, yday := yday(date)]
-        gr = dedupe.mrow.days(gr)
-        setkey(gr, mrow, yday)
-
-        sapply(simplify = F, temp.ground.vars, function(dvname)
-           {message("Predicting ", dvname)
-            d.model[, ground.temp := get(dvname)]
-            f.pred = train.model(d.model[!is.na(ground.temp)])
-            pred = f.pred(dedupe.mrow.days(d.model)[
-                .(slice$mrow, yday(slice$date))])
-            observed = gr[.(slice$mrow, yday(slice$date)), get(dvname)]
-            ifelse(is.na(observed), pred, observed)})}
-    d.query[, (temp.ground.vars) := f(.SD),
-       by = year(date),
-       .SDcols = c("date", "mrow")]
-
-    d.query[, .(
-        temperature.lo = ground.temp.lo,
-        temperature.mean = ground.temp.mean,
-        temperature.hi = ground.temp.hi)]}
-predict.temps = pairmemo(predict.temps, pairmemo.dir, mem = T, fst = T)
+    d = d[mrow %in% mrow.sets[[mrow.set]],
+        keyby = .(mrow, yday),
+        .SDcols = paste0("pred.", temp.ground.vars),
+        head(.SD, 1)]}
+predict.temps = pairmemo(predict.temps, pairmemo.dir, fst = T)
 
 c(master.grid, ground, stations, stns.by.dist) %<-% get.nonsatellite.data()
+mrow.sets$pred.area = master.grid[, which(in.pred.area)]
+mrow.sets$test = mrow.sets$pred.area[1:50]
