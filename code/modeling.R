@@ -133,6 +133,10 @@ get.satellite.data = function(satellite, product, the.year)
     if (product == "temperature")
       # Read from fst files produced by
       # https://gitlab.com/ihough/modis_lst_hdf_to_fst
+      # The dates are actually in UTC, not our desired working
+      # time zone of UTC-06:00. However, I checked a year's worth
+      # of overpass times and it seems to work out that each
+      # overpass is assigned to the correct UTC-06:00 date.
        {d = read_fst(
             file.path(satellite.temperature.dir,
                 sprintf("%s11A1_%d.fst", satellite.codes[satellite], the.year)),
