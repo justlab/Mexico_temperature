@@ -482,12 +482,23 @@ summarize.cv.results = function(multirun.output)
     j1 = quote(.(.N, stn = length(unique(stn)),
         sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
+    d[, c("lon", "lat") := stations[d$stn, .(lon, lat)]]
     list(
         overall = cbind(
             d
                 [, eval(j1), keyby = .(year, dv)]
                 [, .(year, dv,
-                    N, stn, sd, rmse, "sd - rmse" = sd - rmse, R2)],
+                    N, stn, sd, rmse, R2)],
+            d
+                [, .(ground.temp, pred, lon, lat, yday,
+                        m = mean(ground.temp)),
+                    by = .(year, dv)]
+                [, .(var.s = mean((ground.temp - m)^2),
+                        mse.s = mean((ground.temp - pred)^2)),
+                    by = .(year, dv, yday, x = floor(4 * lon), y = floor(4 * lat))]
+                [, .(sd.s = sqrt(mean(var.s)), rmse.s = sqrt(mean(mse.s))),
+                    keyby = .(year, dv)]
+                [, .(sd.s, rmse.s)],
             d
                 [, .(mean.obs = mean(ground.temp), mean.pred = mean(pred)),
                     keyby = .(year, dv, stn)]
