@@ -308,6 +308,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
         ndvi = (terra.ndvi + aqua.ndvi)/2,
         elevation,
         wind.speed.mean,
+        season = factor(months2seasons[month]),
         time.sin = sinpi(2 * (yday - 1)/(max.yday - 1)),
         time.cos = cospi(2 * (yday - 1)/(max.yday - 1)))]
 
@@ -397,40 +398,24 @@ impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F)
 
 train.model = function(dataset)
    {fe = (~
-        satellite.temp.day + satellite.temp.day.imputed +
-        satellite.temp.night + satellite.temp.night.imputed +
+        season * (satellite.temp.day + satellite.temp.night) +
+        satellite.temp.day.imputed +
+        satellite.temp.night.imputed +
         ndvi +
         time.sin + time.cos +
         elevation +
         wind.speed.mean)
     preproc = preProcess(method = c("center", "scale"),
-        dataset[,
-            setdiff(all.vars(fe), grep("imputed", all.vars(fe), val = T)),
-            with = F])
-    m = lmer.alternatives(
+        dataset[, mget(grep(invert = T, val = T,
+            "imputed|season", all.vars(fe)))])
+    m = lmer(
         data = predict(preproc, dataset),
         formula = update.formula(fe, ground.temp ~ . +
-            (1 + satellite.temp.day + satellite.temp.night | yday)),
-        optimizers = list(
-            list(),
-            list(control = lmerControl(optimizer = "Nelder_Mead")),
-            list(control = lmerControl(optimizer = "optimx",
-                optCtrl = list(method = "L-BFGS-B"))),
-            list(control = lmerControl(optimizer = "optimx",
-                optCtrl = list(method = "nlminb")))))
+            (1 | yday)),
+        control = lmerControl(check.conv.singular = "warning"))
     function(newdata)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
-
-lmer.alternatives = function(formula, data, optimizers)
-  # Try calling `lmer` with each list of arguments in `optimizers`
-  # and return the model from the first fit that doesn't produce any
-  # warnings.
-   {for (arglist in optimizers)
-        tryCatch(
-            return(do.call(lmer, c(list(formula, data), arglist))),
-            warning = function(w) NULL)
-    stop("All lmer.alternatives failed")}
 
 run.cv = function(the.year, dvname)
   # Under cross-validation, predict ground temperature using
@@ -482,8 +467,6 @@ months2seasons = factor(c(
 summarize.cv.results = function(multirun.output)
    {d = multirun.output[fold != -1]
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
-    d[, season := months2seasons[
-        month(as.Date(paste0(year, "-01-01")) + yday)]]
     idist = 1 / as.matrix(dist(stations[, .(lon, lat)]))
     diag(idist) = 0
     ustns = stations$stn
