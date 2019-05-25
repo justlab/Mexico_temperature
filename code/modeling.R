@@ -285,13 +285,18 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
 
     # Within each grid cell, linearly interpolate missing
     # satellite temperatures on the basis of day.
-    for (vname in c("satellite.temp.day", "satellite.temp.night"))
-       {message("Interpolating ", vname)
-        d[, paste0(vname, ".imputed") := is.na(get(vname))]
-        d[, (vname) := approx(
-                x = yday, y = get(vname), xout = yday,
-                method = "linear", rule = 2)$y,
-            by = mrow]}
+    withCallingHandlers(
+       {for (vname in c("satellite.temp.day", "satellite.temp.night"))
+           {message("Interpolating ", vname)
+            d[, paste0(vname, ".imputed") := is.na(get(vname))]
+            d[, (vname) := approx(
+                    x = yday, y = get(vname), xout = yday,
+                    method = "linear", rule = 2)$y,
+                by = mrow]}},
+        # Ignore warnings that `yday` is not unique within `mrow`.
+        warning = function(w)
+            if (grepl("collapsing to unique", conditionMessage(w)))
+                invokeRestart("muffleWarning"))
 
     if (nonmissing.ground.temp)
        {message("Dropping")
