@@ -21,9 +21,9 @@
 #     summarize.cv.results(multi.run.cv(available.years))
 #
 # Get predictions of the lows, highs, and mean temperature for
-# new positions and days in the study area:
+# all days and squares in the prediction area:
 #
-#     predict.temps(FILENAME)
+#     predict.temps(2012L, "pred.area")
 
 suppressPackageStartupMessages(
    {library(data.table)
