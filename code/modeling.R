@@ -68,10 +68,8 @@ get.nonsatellite.data = function()
     master.grid <<- rbindlist(Map(read.vegetation.file, full.grid = T,
         grep(value = T, "\\.A\\d{4}001\\.[^/]+$",
             vegetation.paths("aqua", master.grid.year))))
-    master.grid <<- master.grid[
-      in.study.area(x, y),
-      .(lon = x, lat = y)]
-    stopifnot(nrow(unique(master.grid)) == nrow(master.grid))
+    master.grid <<- master.grid[in.study.area(lon, lat)]
+    stopifnot(nrow(unique(master.grid[, .(lon, lat)])) == nrow(master.grid))
     # Determine which rows of the master grid are in the prediction
     # area.
     message("Finding prediction area")
@@ -191,12 +189,17 @@ read.vegetation.file = function(fpath, full.grid = F)
         "HDF4_EOS:EOS_GRID:",
         fpath,
         ":MOD_Grid_monthly_1km_VI:1 km monthly NDVI")
-    d = raster(readGDAL(subdataset, silent = T))
+    g = readGDAL(subdataset, silent = T)
     if (full.grid)
-        d[,] = 1
-    d = as.data.table(spTransform(rasterToPoints(d, spatial = T),
+        g$band1 = 1
+    g = as(g, "SpatialPointsDataFrame")
+    d = as.data.table(spTransform(g,
         "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
-    if (!full.grid)
+    if (full.grid)
+       {setnames(d, c("x", "y"), c("lon", "lat"))
+        d[, c("x_sinu", "y_sinu") := as.data.frame(g)[, c("x", "y")]]
+        d = d[order(lon, lat)]}
+    else
        {setnames(d, "band1", "ndvi")
         # The scale factor has already been applied, but by
         # multiplication instead of division, so divide by the
