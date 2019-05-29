@@ -70,15 +70,18 @@ get.nonsatellite.data = function()
             vegetation.paths("aqua", master.grid.year))))
     master.grid <<- master.grid[in.study.area(lon, lat)]
     stopifnot(nrow(unique(master.grid[, .(lon, lat)])) == nrow(master.grid))
-    # Determine which rows of the master grid are in the prediction
-    # area.
-    message("Finding prediction area")
-    master.grid[, in.pred.area := local(
+    # Determine which region each cell of the master grid is in.
+    message("Finding regions")
+    master.grid[, region := local(
       {mg = st_transform(crs = crs.mexico.city,
            st_as_sf(master.grid, coords = c("lon", "lat"), crs = crs.lonlat))
        pa = st_transform(crs = crs.mexico.city, pred.area())
        sti = st_intersects(mg, pa, sparse = F)
-       rowSums(sti) > 0})]
+       # Each cell of the master grid should be in at most one region.
+       stopifnot(all(rowSums(sti) %in% c(0, 1)))
+       factor(labels = pa$NOMGEO, apply(sti, 1, function(v)
+            if (any(v)) which(v) else NA))})]
+    master.grid[, in.pred.area := !is.na(region)]
 
     message("Loading elevation")
     # Read from fst files produced by `prepare_elevation_mex.Rmd`.
@@ -482,6 +485,7 @@ summarize.cv.results = function(multirun.output)
         sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
         R2 = cor(ground.temp, pred)^2))
     d[, c("lon", "lat") := stations[d$stn, .(lon, lat)]]
+    d[, region := master.grid[stations[d$stn, mrow], region]]
     list(
         overall = cbind(
             d
@@ -538,7 +542,12 @@ summarize.cv.results = function(multirun.output)
                         merr,
                         idist[ustns %in% stn, ustns %in% stn])$p.value),
                     by = .(year, dv, season)]
-                [, .("Moran p" = V1)]))}
+                [, .("Moran p" = V1)]),
+        by.region =
+            d
+                [year == 2017, eval(j1), keyby = .(dv, region)]
+                [, .(dv, region,
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)])}
 
 predict.temps = function(the.year, mrow.set)
   # Predict a low, mean, and high temperature for every cell in
