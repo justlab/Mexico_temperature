@@ -52,7 +52,7 @@ elevation.path = "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst"
 plan(multiprocess)
 
 n.folds = 10
-available.years = 2003 : 2017
+available.years = 2003 : 2018
 master.grid.year = 2012L
   # This needs to be a year for which we have satellite vegetation
   # data, but the exact value shouldn't matter much.
