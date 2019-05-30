@@ -6,6 +6,10 @@
 # a few more observations (any number of which may not be in the
 # study area, anyway).
 
+# Warning about pressure: it isn't clear if any of the pressures
+# values have been adjusted to sea level. This should be investigated
+# before using pressure values.
+
 ## -----------------------------------------------------------
 ## * Libraries and constants
 ## -----------------------------------------------------------
@@ -792,9 +796,6 @@ max.deviance.temp.Cdeg = 20
 extreme.hi.temp.C = 53
 extreme.lo.temp.C = -30
 extreme.precipitation.mm = 1634
-# https://en.wikipedia.org/wiki/Atmospheric_pressure#Records
-extreme.hi.pressure.hPa = 1085
-extreme.lo.pressure.hPa = 869
 # https://en.wikipedia.org/wiki/Wind_speed
 extreme.wind.speed.mps = 114
 
@@ -829,9 +830,6 @@ filter.raw = function(stations, obs, print.deviant.obs = F)
                 temp.C.mean > temp.C.max),
             wet = precipitation.mm.total >= extreme.precipitation.mm,
             dry = precipitation.mm.total < 0,
-            # Ignore pressure for now.
-            # pressure.hPa.mean >= extreme.hi.pressure.hPa,
-            # pressure.hPa.mean <= extreme.lo.pressure.hPa,
             fast = wind.speed.mps.mean >= extreme.wind.speed.mps,
             slow = wind.speed.mps.mean < 0)]
         absurd = absurd[, lapply(.SD, function(v)
