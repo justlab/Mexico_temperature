@@ -35,7 +35,8 @@ suppressPackageStartupMessages(
     library(sf)
     library(future.apply)
     library(zeallot)
-    library(caret)})
+    library(caret)
+    library(stringr)})
 
 source("../Just_universal/code/pairmemo.R")
 pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
@@ -57,6 +58,8 @@ master.grid.year = 2012L
   # data, but the exact value shouldn't matter much.
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
+satellite.tiles = c("h08v06", "h08v07")
+  # https://modis-land.gsfc.nasa.gov/MODLAND_grid.html
 
 temp.ground.vars = c(
     "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
@@ -179,9 +182,44 @@ get.satellite.data = function(satellite, product, the.year)
 get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
 
 vegetation.paths = function(satellite, the.year)
-    grep(fixed = T, value = T,
-        paste0(satellite.codes[satellite], "13A3.A", the.year),
-        dir(satellite.vegetation.dir, full.names = T))
+   {paths = function()
+        str_subset(
+            list.files(satellite.vegetation.dir, full.names = T),
+            fixed(paste0(satellite.codes[satellite], "13A3.A", the.year)))
+    # Check that there's at least one file for this year. If there
+    # isn't, download all the files we need for this year.
+    if (!length(paths()))
+        download.vegetation(satellite, the.year)
+    paths()}
+
+download.vegetation = function(satellite, the.year)
+   {message("Downloading vegetation for ", satellite, " ", the.year)
+    suppressPackageStartupMessages(library(httr))
+
+    creds = Sys.getenv(names = F,
+        c("EARTHDATA_USERNAME", "EARTHDATA_PASSWORD"))
+    if (any(creds == ""))
+        stop("You need to set the environment variables EARTHDATA_USERNAME and EARTHDATA_PASSWORD. If you don't have an account, you can get one at https://urs.earthdata.nasa.gov/users/new")
+
+    base.url = sprintf("https://e4ftl01.cr.usgs.gov/MOL%s/%s13A3.006",
+        substr(toupper(satellite), 1, 1),
+        satellite.codes[satellite])
+
+    for (the.month in 1 : 12)
+       {the.dir = sprintf("%s/%d.%02d.01",
+            base.url, the.year, the.month)
+        page = GET(the.dir)
+        stop_for_status(page)
+
+        for (tile in satellite.tiles)
+           {fname = str_match(content(page, "text"),
+                sprintf('<a href="([^"]+?\\.%s\\.[^"]+\\.hdf)"', tile))[,2]
+            message("Getting ", fname)
+            r = GET(paste0(the.dir, "/", fname),
+                authenticate(creds[1], creds[2]))
+            stop_for_status(r)
+            writeBin(content(r, "raw"),
+                file.path(satellite.vegetation.dir, fname))}}}
 
 read.vegetation.file = function(fpath, full.grid = F)
    {suppressPackageStartupMessages(
