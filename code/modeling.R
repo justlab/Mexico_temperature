@@ -630,7 +630,7 @@ deleg.weighted.preds = function()
    {message("Loading population counts")
     d = rbindlist(unlist(rec = F, lapply(c(F, T), function(only.65plus) lapply(
         list.files(full.names = T, sprintf(population.path.fmt,
-            (if (only.65plus) "65+" else "Total"))),
+            (if (only.65plus) "65" else "Total"))),
         function(s)
            {d = subset(fread(s), select = -TOTAL)
             d[, date := as.Date(date, format = "%m/%d/%Y")]
