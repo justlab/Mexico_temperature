@@ -527,6 +527,7 @@ summarize.cv.results = function(multirun.output)
         R2 = cor(ground.temp, pred)^2))
     d[, c("lon", "lat") := stations[d$stn, .(lon, lat)]]
     d[, region := master.grid[stations[d$stn, mrow], region]]
+    d[, network := stations[d$stn, network]]
     list(
         overall = cbind(
             d
@@ -588,6 +589,11 @@ summarize.cv.results = function(multirun.output)
             d
                 [year == 2017, eval(j1), keyby = .(dv, region)]
                 [, .(dv, region,
+                    N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
+        by.network =
+            d
+                [year == 2017, eval(j1), keyby = .(dv, network)]
+                [, .(dv, network,
                     N, stn, sd, rmse, "sd - rmse" = sd - rmse)])}
 
 predict.temps = function(the.year, mrow.set)
