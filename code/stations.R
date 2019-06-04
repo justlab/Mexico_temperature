@@ -372,7 +372,7 @@ get.ground.raw.smn.observatories = function()
     punl(stations, obs)}
 get.ground.raw.smn.observatories = pairmemo(get.ground.raw.smn.observatories, pairmemo.dir)
 
-## *** ESIMES and EMAS
+## *** ESIMEs and EMAs
 
 get.ground.raw.smn.esimes = function()
     es.stations(process.es.observations(read.es()))
