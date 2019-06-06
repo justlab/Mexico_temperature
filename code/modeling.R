@@ -589,12 +589,12 @@ summarize.cv.results = function(multirun.output)
                 [, .("Moran p" = V1)]),
         by.region =
             d
-                [year == 2017, eval(j1), keyby = .(dv, region)]
+                [year == 2018, eval(j1), keyby = .(dv, region)]
                 [, .(dv, region,
                     N, stn, sd, rmse, "sd - rmse" = sd - rmse)],
         by.network =
             d
-                [year == 2017, eval(j1), keyby = .(dv, network)]
+                [year == 2018, eval(j1), keyby = .(dv, network)]
                 [, .(dv, network,
                     N, stn, sd, rmse, "sd - rmse" = sd - rmse)])}
 
