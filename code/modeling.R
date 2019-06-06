@@ -522,9 +522,11 @@ summarize.cv.results = function(multirun.output)
     idist = 1 / as.matrix(dist(stations[, .(lon, lat)]))
     diag(idist) = 0
     ustns = stations$stn
+    f.r2 = function(pred, obs)
+        1 - mean((obs - pred)^2)/var(obs)
     j1 = quote(.(.N, stn = length(unique(stn)),
         sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
-        R2 = cor(ground.temp, pred)^2))
+        R2 = f.r2(pred, ground.temp)))
     d[, c("lon", "lat") := stations[d$stn, .(lon, lat)]]
     d[, region := master.grid[stations[d$stn, mrow], region]]
     d[, network := stations[d$stn, network]]
