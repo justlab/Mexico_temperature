@@ -624,6 +624,32 @@ predict.temps = function(the.year, mrow.set)
         head(.SD, 1)]}
 predict.temps = pairmemo(predict.temps, pairmemo.dir, fst = T)
 
+predict.temps.at = function(fname, date.col, lon.col, lat.col)
+   {d = as.data.table(readRDS(fname)[,
+        c(date.col, lon.col, lat.col)])
+    setnames(d, c("date", "lon", "lat"))
+    set.mrows(d, "lon", "lat")
+    d[, yday := yday(date)]
+    d[, by = .(y = year(date)), (temp.ground.vars) :=
+        predict.temps(y, "pred.area")[.(.SD$mrow, .SD$yday),
+            mget(paste0("pred.", temp.ground.vars))]]
+
+    # Also get some crude predictions of precipitation, via
+    # inverse-distance weighting (IDW).
+    precip = merge(
+        get.ground()$obs[, .(stn, date, precipitation.mm.total)],
+        get.ground()$stations[, .(stn, lon, lat)],
+        all.x = T, all.y = F,
+        by = "stn")[!is.na(precipitation.mm.total)]
+    d[, by = date, precipitation.mm := gstat::idw(
+        formula = precipitation.mm.total ~ 1,
+        locations = ~ lon + lat,
+        data = precip[date == .BY$date],
+        newdata = .SD,
+        debug.level = 0)[, "var1.pred"]]
+
+    d[, mget(c(temp.ground.vars, "precipitation.mm"))]}
+
 deleg.weighted.preds = function()
   # Predict temperature per day and delegación (subregion of
   # Mexico City), weighted by the population of each delegación.
