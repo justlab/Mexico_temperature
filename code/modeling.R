@@ -630,12 +630,28 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
     setnames(d, c("date", "lon", "lat"))
     set.mrows(d, "lon", "lat")
     d[, yday := yday(date)]
-    d[, by = .(y = year(date)), (temp.ground.vars) :=
+    message("Getting model predictions")
+    d[, by = .(y = year(date)), paste0("model.", temp.ground.vars) :=
         predict.temps(y, "pred.area")[.(.SD$mrow, .SD$yday),
             mget(paste0("pred.", temp.ground.vars))]]
 
+    # Also find the temperature statistics of the nearest ground
+    # station.
+    message("Getting nearest temperatures")
+    g = copy(ground)
+    setkey(g, stn, date)
+    d[, paste0("nearest.", temp.ground.vars) :=
+        rbindlist(lapply(1 : .N, function(r)
+           {the.date = date[r]
+            for (the.stn in stns.by.dist[mrow[r],])
+               {gr = g[.(the.stn, the.date), mget(temp.ground.vars)]
+                if (!anyNA(gr))
+                    return(gr)}
+            stop()}))]
+
     # Also get some crude predictions of precipitation, via
     # inverse-distance weighting (IDW).
+    message("Predicting precipitation")
     precip = merge(
         get.ground()$obs[, .(stn, date, precipitation.mm.total)],
         get.ground()$stations[, .(stn, lon, lat)],
@@ -648,7 +664,10 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         newdata = .SD,
         debug.level = 0)[, "var1.pred"]]
 
-    d[, mget(c(temp.ground.vars, "precipitation.mm"))]}
+    d[, mget(c(
+        paste0("model.", temp.ground.vars),
+        paste0("nearest.", temp.ground.vars),
+        "precipitation.mm"))]}
 
 deleg.weighted.preds = function()
   # Predict temperature per day and delegación (subregion of
