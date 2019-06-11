@@ -18,7 +18,7 @@ We use several sources of data:
 License
 ============================================================
 
-This program is copyright 2018, 2019 Kodi B. Arfer and Iván Gutiérrez-Avila.
+This program is copyright 2018, 2019 Kodi B. Arfer, Iván Gutiérrez-Avila, and Johnathan Rush.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
