@@ -5,11 +5,12 @@ suppressPackageStartupMessages(
 
 l = local(
    {source("modeling.R")
-    list(master.grid, stations, pred.area, predict.temps)})
+    list(master.grid, stations, pred.area, predict.temps, crs.satellite)})
 master.grid = l[[1]]
 stations = l[[2]]
 pred.area = l[[3]]
 predict.temps = l[[4]]
+crs.satellite = l[[5]]
 
 temp.map = function(the.year, temp.kind, agg, fill.args)
    {d = local(
@@ -58,6 +59,5 @@ area.map = function()
         geom_point(aes(x_sinu, y_sinu), color = "red",
             size = .1,
             data = master.grid[unique(stations$mrow)]) +
-        coord_sf(crs = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs",
-            datum = NA) +
+        coord_sf(crs = crs.satellite, datum = NA) +
         theme_void()}
