@@ -5,12 +5,14 @@ suppressPackageStartupMessages(
 
 l = local(
    {source("modeling.R")
-    list(master.grid, stations, pred.area, predict.temps, crs.satellite)})
+    list(master.grid, stations, pred.area, predict.temps, per.mrow.population, crs.satellite, all.agebs.year)})
 master.grid = l[[1]]
 stations = l[[2]]
 pred.area = l[[3]]
 predict.temps = l[[4]]
-crs.satellite = l[[5]]
+per.mrow.population = l[[5]]
+crs.satellite = l[[6]]
+all.agebs.year = l[[7]]
 
 temp.map = function(the.year, temp.kind, agg, fill.args)
    {d = local(
@@ -60,4 +62,28 @@ area.map = function()
             size = .1,
             data = master.grid[unique(stations$mrow)]) +
         coord_sf(crs = crs.satellite, datum = NA) +
+        theme_void()}
+
+pop.map = function(xlims, ylims, pop.col, threshold.tempC = NULL)
+   {d = merge(
+        master.grid,
+        per.mrow.population(xlims, ylims, pop.col),
+        by = "mrow")
+    if (!is.null(threshold.tempC))
+       {d = merge(d,
+            predict.temps(all.agebs.year, "pred.area")[, keyby = mrow,
+                .(hot.days = sum(pred.ground.temp.hi >= threshold.tempC))],
+            by = "mrow",
+            all.x = T)
+        stopifnot(!anyNA(d$hot.days))
+        d[, val := hot.days * pop]}
+    else
+        setnames(d, "pop", "val")
+
+    ggplot() +
+        geom_raster(aes(x_sinu, y_sinu, fill = val),
+            data = d) +
+        scale_fill_distiller(
+            palette = "Spectral",
+            guide = guide_colorbar(nbin = 500)) +
         theme_void()}

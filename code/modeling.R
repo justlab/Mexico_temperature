@@ -48,7 +48,9 @@ c(get.ground, in.study.area, pred.area, crs.lonlat, crs.mexico.city) %<-% local(
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
 elevation.path = "/data-belle/Mexico_temperature/elevation/srtm30_extracted.fst"
-agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
+mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
+all.agebs.path = "/data-belle/Mexico_temperature/agebs_2010"
+all.agebs.year = 2010L
 population.path.fmt = "~/Jdrive/PM/Just_Lab/projects/airmex/data/population/%s_cuadratic_csv"
 
 plan(multiprocess)
@@ -694,7 +696,7 @@ deleg.weighted.preds = function()
     # delegaciones.
     message("Loading AGEB definitions")
     d = local(
-       {agebs = read_sf(agebs.path)
+       {agebs = read_sf(mexico.city.agebs.path)
         agebs = data.table(
             ageb = factor(agebs$CVEGEO),
             # For each AGEB, choose a cell of the master grid by finding the
@@ -722,6 +724,46 @@ deleg.weighted.preds = function()
         .SDcols = paste0("pred.", temp.ground.vars),
         lapply(.SD, function(temp) sum(temp * pop)/sum(pop))]}
 deleg.weighted.preds = pairmemo(deleg.weighted.preds, pairmemo.dir, fst = T)
+
+per.mrow.population = function(xlims, ylims, pop.col)
+   {message("Making subgrid")
+    subgrid = master.grid[
+        in.pred.area &
+        xlims[1] <= x_sinu & x_sinu <= xlims[2] &
+        ylims[1] <= y_sinu & y_sinu <= ylims[2]]
+    subgrid.ps = st_sf(subgrid[, .(mrow)],
+        st_sfc(crs = crs.satellite, mapply(SIMPLIFY = F, square.xyd,
+            subgrid$x_sinu, subgrid$y_sinu,
+            master.grid[, median(c(
+                diff(sort(unique(x_sinu))),
+                diff(sort(unique(y_sinu)))))])))
+
+    message("Getting AGEBs")
+    agebs = st_transform(crs = crs.satellite, read_sf(all.agebs.path))
+    #agebs = agebs[c(st_intersects(sparse = F, agebs, st_union(subgrid.ps))),]
+
+    message("Intersecting")
+    agebs$ageb.area = st_area(agebs)
+    isect = st_intersection(agebs, subgrid.ps)
+    isect$pop = with(isect,
+        units::drop_units(get(pop.col) * st_area(isect) / ageb.area))
+    setDT(isect)
+    isect = isect[, by = mrow, .(pop = sum(pop))]
+    isect = rbind(isect,
+        data.table(mrow = setdiff(subgrid$mrow, isect$mrow), pop = 0))
+    setkey(isect, mrow)
+    isect}
+per.mrow.population = pairmemo(per.mrow.population, pairmemo.dir, mem = T, fst = T)
+
+square.xyd = function(x, y, d)
+  # Create a polygon object representing a square from the x- and
+  # y-coordinates of the center and its side length `d`.
+   st_polygon(list(matrix(ncol = 2, byrow = T, c(
+       x + d/2, y + d/2,    # NE
+       x - d/2, y + d/2,    # NW
+       x - d/2, y - d/2,    # SW
+       x + d/2, y - d/2,    # SE
+       x + d/2, y + d/2)))) # NE
 
 c(master.grid, ground, stations, stns.by.dist) %<-% get.nonsatellite.data()
 mrow.sets$pred.area = master.grid[, which(in.pred.area)]
