@@ -76,6 +76,8 @@ get.nonsatellite.data = function()
             vegetation.paths("aqua", master.grid.year))))
     master.grid <<- master.grid[in.study.area(lon, lat)]
     stopifnot(nrow(unique(master.grid[, .(lon, lat)])) == nrow(master.grid))
+    master.grid[, mrow := .I]
+    setcolorder(master.grid, "mrow")
     # Determine which region each cell of the master grid is in.
     message("Finding regions")
     master.grid[, region := local(
@@ -240,7 +242,8 @@ read.vegetation.file = function(fpath, full.grid = F)
     d = as.data.table(spTransform(g,
         "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
     if (full.grid)
-       {setnames(d, c("x", "y"), c("lon", "lat"))
+       {d[, band1 := NULL]
+        setnames(d, c("x", "y"), c("lon", "lat"))
         d[, c("x_sinu", "y_sinu") := as.data.frame(g)[, c("x", "y")]]
         d = d[order(lon, lat)]}
     else
