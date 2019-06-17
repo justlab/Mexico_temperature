@@ -64,15 +64,19 @@ area.map = function()
         coord_sf(crs = crs.satellite, datum = NA) +
         theme_void()}
 
-pop.map = function(xlims, ylims, pop.col, threshold.tempC = NULL)
+pop.map = function(pop.col, threshold.tempC = NULL, hotter = T, xlims = NULL, ylims = NULL)
    {d = merge(
-        master.grid,
-        per.mrow.population(xlims, ylims, pop.col),
+        master.grid[if (is.null(xlims) | is.null(ylims)) T else
+           (xlims[1] <= lon & lon <= xlims[2] &
+            ylims[1] <= lat & lat <= ylims[2])],
+        per.mrow.population(pop.col),
         by = "mrow")
     if (!is.null(threshold.tempC))
        {d = merge(d,
             predict.temps(all.agebs.year, "pred.area")[, keyby = mrow,
-                .(hot.days = sum(pred.ground.temp.hi >= threshold.tempC))],
+                .(hot.days = sum(if (hotter)
+                    pred.ground.temp.hi >= threshold.tempC else
+                    pred.ground.temp.lo <= threshold.tempC))],
             by = "mrow",
             all.x = T)
         stopifnot(!anyNA(d$hot.days))
@@ -86,4 +90,5 @@ pop.map = function(xlims, ylims, pop.col, threshold.tempC = NULL)
         scale_fill_distiller(
             palette = "Spectral",
             guide = guide_colorbar(nbin = 500)) +
-        theme_void()}
+        theme_void() +
+        coord_equal()}

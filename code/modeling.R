@@ -725,12 +725,9 @@ deleg.weighted.preds = function()
         lapply(.SD, function(temp) sum(temp * pop)/sum(pop))]}
 deleg.weighted.preds = pairmemo(deleg.weighted.preds, pairmemo.dir, fst = T)
 
-per.mrow.population = function(xlims, ylims, pop.col)
+per.mrow.population = function(pop.col)
    {message("Making subgrid")
-    subgrid = master.grid[
-        in.pred.area &
-        xlims[1] <= x_sinu & x_sinu <= xlims[2] &
-        ylims[1] <= y_sinu & y_sinu <= ylims[2]]
+    subgrid = master.grid[(in.pred.area)]
     subgrid.ps = st_sf(subgrid[, .(mrow)],
         st_sfc(crs = crs.satellite, mapply(SIMPLIFY = F, square.xyd,
             subgrid$x_sinu, subgrid$y_sinu,
@@ -740,7 +737,6 @@ per.mrow.population = function(xlims, ylims, pop.col)
 
     message("Getting AGEBs")
     agebs = st_transform(crs = crs.satellite, read_sf(all.agebs.path))
-    #agebs = agebs[c(st_intersects(sparse = F, agebs, st_union(subgrid.ps))),]
 
     message("Intersecting")
     agebs$ageb.area = st_area(agebs)
