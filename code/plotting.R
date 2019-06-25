@@ -53,16 +53,28 @@ change.map = function(years1, years2)
         theme_void()}
 
 area.map = function()
-   {ggplot() +
-        geom_raster(aes(x_sinu, y_sinu), fill = "#aaaaaa",
+   {xr = range(master.grid$x_sinu)
+    yr = range(master.grid$y_sinu)
+    xd = 5000
+    yd = 5000
+    ggplot() +
+        geom_raster(aes(x_sinu, y_sinu), fill = "gray95",
             data = master.grid) +
         geom_sf(data = pred.area(),
             fill = "white", color = "black", size = .2) +
         geom_point(aes(x_sinu, y_sinu), color = "red",
             size = .1,
             data = master.grid[unique(stations$mrow)]) +
-        coord_sf(crs = crs.satellite, datum = NA) +
-        theme_void()}
+        coord_sf(crs = crs.satellite, expand = F,
+            xlim = c(xr[1] - xd, xr[2] + xd),
+            ylim = c(yr[1] - yd, yr[2] + yd)) +
+        scale_x_continuous(name = "",
+            breaks = -100 : -98) +
+        scale_y_continuous(name = "",
+            breaks = c(18.5, 19, 19.5, 20, 20.5)) +
+        theme_bw() +
+        theme(
+            panel.grid.major = element_line(color = "transparent"))}
 
 pop.map = function(pop.col, threshold.tempC = NULL, hotter = T, xlims = NULL, ylims = NULL)
    {d = merge(
