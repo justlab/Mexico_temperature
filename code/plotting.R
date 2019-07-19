@@ -76,6 +76,16 @@ area.map = function()
         theme(
             panel.grid.major = element_line(color = "transparent"))}
 
+mexico.context.map = function()
+    ggmap::ggmap(get_stamenmap(zoom = 5,
+            c(left = -123, right = -86, bottom = 10, top = 34),
+            maptype = "terrain")) +
+        with(study.area(), annotate("rect",
+            xmin = left, xmax = right,
+            ymin = bottom, ymax = top,
+            color = "red", fill = NA)) +
+        theme_void()
+
 pop.map = function(pop.col, threshold.tempC = NULL, hotter = T, xlims = NULL, ylims = NULL)
    {d = merge(
         master.grid[if (is.null(xlims) | is.null(ylims)) T else
