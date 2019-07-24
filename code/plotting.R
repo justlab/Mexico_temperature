@@ -5,30 +5,46 @@ suppressPackageStartupMessages(
 
 l = local(
    {source("modeling.R")
-    list(master.grid, stations, pred.area, predict.temps, per.mrow.population, crs.satellite, all.agebs.year)})
+    list(master.grid, ground, stations, pred.area, predict.temps, per.mrow.population, crs.satellite, all.agebs.year)})
 master.grid = l[[1]]
-stations = l[[2]]
-pred.area = l[[3]]
-predict.temps = l[[4]]
-per.mrow.population = l[[5]]
-crs.satellite = l[[6]]
-all.agebs.year = l[[7]]
+ground = l[[2]]
+stations = l[[3]]
+pred.area = l[[4]]
+predict.temps = l[[5]]
+per.mrow.population = l[[6]]
+crs.satellite = l[[7]]
+all.agebs.year = l[[8]]
 
-temp.map = function(the.year, temp.kind, agg, fill.args)
+base.size = 14
+
+temp.quantiles.map = function(the.year)
    {d = local(
       {p = predict.temps(the.year, "pred.area")
-       cbind(
-           p[, .(temp = get(paste0("pred.ground.temp.", temp.kind)))],
+       p = rbind(
+           p[, .(mrow, temp = pred.ground.temp.lo, kind = 1)],
+           p[, .(mrow, temp = pred.ground.temp.hi, kind = 2)])
+       cbind(p,
            master.grid[p$mrow, .(x_sinu, y_sinu)])})
-    d = d[, by = .(x_sinu, y_sinu), .(temp = agg(temp))]
+    d = d[, by = .(x_sinu, y_sinu, kind), .(temp = quantile(temp, .95))]
     message("Range: ", floor(min(d$temp)), " to ", ceiling(max(d$temp)))
     ggplot(d) +
         geom_raster(aes(x_sinu, y_sinu, fill = temp)) +
-        do.call(scale_fill_distiller, c(fill.args, list(
+        facet_grid(. ~ kind) +
+        scale_fill_distiller(
+            name = "Temperature (°C)",
             palette = "Spectral",
-            limits = range(fill.args$breaks),
-            guide = guide_colorbar(nbin = 500)))) +
-        theme_void()}
+            limits = c(0, 40),
+            breaks = seq(0, 40, by = 5),
+            guide = guide_colorbar(nbin = 500)) +
+        geom_vline(data = data.frame(kind = 1, x = max(d$x_sinu) + 1),
+            aes(xintercept = x)) +
+        theme_void(base_size = base.size) +
+        theme(
+           strip.background = element_blank(),
+           strip.text.x = element_blank(),
+           panel.spacing = unit(-7, "mm"),
+           legend.position = "bottom", legend.key.width = unit(20, "mm")) +
+        coord_equal()}
 
 change.map = function(years1, years2)
    {d = local(
@@ -50,9 +66,10 @@ change.map = function(years1, years2)
             limits = c(-2.7, 1.6),
             breaks = c(-2.7, -2, -1, 0, 1, 1.6),
             guide = guide_colorbar(nbin = 500)) +
-        theme_void()}
+        theme_void() +
+        coord_equal()}
 
-area.map = function()
+area.map = function(years = NULL)
    {xr = range(master.grid$x_sinu)
     yr = range(master.grid$y_sinu)
     xd = 5000
@@ -64,7 +81,10 @@ area.map = function()
             fill = "white", color = "black", size = .2) +
         geom_point(aes(x_sinu, y_sinu), color = "red",
             size = .1,
-            data = master.grid[unique(stations$mrow)]) +
+            data = master.grid[unique(stations[
+                (if (is.null(years)) T else (stn %in%
+                    ground[year(date) %in% years, unique(stn)])),
+                mrow])]) +
         coord_sf(crs = crs.satellite, expand = F,
             xlim = c(xr[1] - xd, xr[2] + xd),
             ylim = c(yr[1] - yd, yr[2] + yd)) +
@@ -86,31 +106,51 @@ mexico.context.map = function()
             color = "red", fill = NA)) +
         theme_void()
 
-pop.map = function(pop.col, threshold.tempC = NULL, hotter = T, xlims = NULL, ylims = NULL)
-   {d = merge(
-        master.grid[if (is.null(xlims) | is.null(ylims)) T else
-           (xlims[1] <= lon & lon <= xlims[2] &
-            ylims[1] <= lat & lat <= ylims[2])],
-        per.mrow.population(pop.col),
-        by = "mrow")
-    if (!is.null(threshold.tempC))
-       {d = merge(d,
-            predict.temps(all.agebs.year, "pred.area")[, keyby = mrow,
-                .(hot.days = sum(if (hotter)
-                    pred.ground.temp.hi >= threshold.tempC else
-                    pred.ground.temp.lo <= threshold.tempC))],
-            by = "mrow",
-            all.x = T)
-        stopifnot(!anyNA(d$hot.days))
-        d[, val := hot.days * pop]}
+pop.map = function(pop.col, thresholds.tempC = NULL)
+   {d = merge(by = "mrow", master.grid, per.mrow.population(pop.col))
+    if (!is.null(thresholds.tempC))
+       {d = merge(d, by = "mrow", all.x = T,
+            predict.temps(all.agebs.year, "pred.area")[, keyby = mrow, .(
+                extreme.days = c(
+                    sum(pred.ground.temp.lo <= thresholds.tempC[1]),
+                    sum(pred.ground.temp.hi >= thresholds.tempC[2])),
+                kind = c(
+                    sprintf("≤ %d °C", thresholds.tempC[1]),
+                    sprintf("≥ %d °C", thresholds.tempC[2])))])
+        stopifnot(!anyNA(d$extreme.days))
+        d[, val := extreme.days * pop]
+        print(d[, keyby = kind, .("total person-days" = sum(val))])}
     else
         setnames(d, "pop", "val")
 
-    ggplot() +
+    p = ggplot() +
         geom_raster(aes(x_sinu, y_sinu, fill = val),
             data = d) +
+        theme_void(base_size = base.size) +
+        coord_equal()
+    if (is.null(thresholds.tempC)) p = p +
         scale_fill_distiller(
-            palette = "Spectral",
-            guide = guide_colorbar(nbin = 500)) +
-        theme_void() +
-        coord_equal()}
+            name = "Population",
+            palette = "RdPu", direction = 1,
+            guide = guide_colorbar(nbin = 500),
+            breaks = c(0, 500, 1000, 1500, 2000, 2700),
+            limits = c(0, 2700),
+            labels = scales::comma)
+    else p = p +
+        scale_fill_distiller(
+            name = "Exposure\n(person-days)",
+            palette = "RdPu", direction = 1,
+            guide = guide_colorbar(nbin = 500),
+            breaks = seq(0, 140e3, 20e3),
+            limits = c(0, 140e3),
+            labels = function(x) ifelse(x == 0, "0",
+                paste0(round(x/1000), "k"))) +
+        facet_grid(. ~ kind) +
+        geom_vline(data = data.frame(kind = d$kind[1], x = max(d$x_sinu) + 1),
+            aes(xintercept = x)) +
+        theme(
+           strip.background = element_blank(),
+           panel.spacing = unit(-7, "mm"),
+           legend.position = "bottom", legend.key.width = unit(20, "mm"))
+
+    p}
