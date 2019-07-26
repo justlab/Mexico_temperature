@@ -66,12 +66,13 @@ download = function(url, to, f, ...)
     f(to, ...)}
 
 slurp.zip = function(path)
-  # Extracts each file in the zip file at `path` as a single
-  # string. The names of the resulting list are set to the inner
-  # file names.
+  # Extracts each file in the ZIP file at `path` as a single
+  # string. (Zero-length files are ignored.) The names of the
+  # resulting list are set to the inner file names.
   # https://stackoverflow.com/a/56191644
-    sapply(unzip(path, list = T)$Name, simplify = F, function(x)
-        paste0(collapse = '\n', readr::read_file(unz(path, x))))
+   {fs = unzip(path, list = T)
+    sapply(fs$Name[fs$Length > 0], simplify = F, function(x)
+        paste0(collapse = '\n', read_file(unz(path, x))))}
 
 mlr = function(...)
     regex(..., multiline = T)
@@ -242,12 +243,8 @@ get.ground.raw.unam = function()
 
         # Sometimes, files seem to consist of multiple CSV
         # files squished together, so break them apart.
-        # Other files are empty, so filter them out.
         files = unlist(lapply(files, function(text)
-            if (str_length(text))
-                str_split(text, "\nPrograma de Estaciones")[[1]]
-            else
-                character(0)))
+            str_split(text, "\nPrograma de Estaciones")[[1]]))
 
         lapply(files, function(text)
            {stopifnot(str_match(text, mlr("^Horario (\\S+)"))[,2]
