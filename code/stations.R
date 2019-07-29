@@ -33,6 +33,8 @@ source("../Just_universal/code/punl.R")
 
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
+latest.year = 2018L
+  # The last year we're interested in.
 proportion.of.day.required = .75
 
 # In the output, all dates signify UTC-06:00 (except for Wunderground).
@@ -131,7 +133,7 @@ get.ground.raw.simat = function()
   #   Everything else: https://web.archive.org/web/20190412141446/http://www.aire.cdmx.gob.mx/descargas/datos/excel/REDMETxls.pdf
   # There's precipitation data available, but only with weekly samples:
   #   http://148.243.232.112:8080/opendata/redda/concentracion.csv - code "PP"
-   {years = year(earliest.date) : (year(Sys.Date()) - 1)
+   {years = year(earliest.date) : latest.year
     url.root = "http://148.243.232.112:8080/opendata"
 
     message("Loading SIMAT")
@@ -186,7 +188,7 @@ get.ground.raw.unam = function()
 
     query = as.data.table(expand.grid(
         stn = c("CCA", paste0("ENP", 1:9), paste0("CCH", c("A", "N", "O", "S", "V"))),
-        dyear = year(earliest.date) : (year(Sys.Date()) - 1)))
+        dyear = year(earliest.date) : latest.year))
     query = query[!(stn == "CCA" & dyear < 2007)]
       # CCA observations start on this year.
 
