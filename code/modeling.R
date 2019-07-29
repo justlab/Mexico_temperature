@@ -51,7 +51,6 @@ population.path.fmt = "~/Jdrive/PM/Just_Lab/projects/airmex/data/population/%s_c
 plan(multiprocess)
 
 n.folds = 10
-available.years = 2003 : 2018
 master.grid.year = 2012L
   # This needs to be a year for which we have satellite vegetation
   # data, but the exact value shouldn't matter much.
@@ -64,6 +63,8 @@ temp.ground.vars = c(
     "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
 nontemp.ground.vars = c(
     "wind.speed.mean")
+
+available.years = year(earliest.date) : latest.year
 
 get.nonsatellite.data = function()
    {message("Loading master grid")

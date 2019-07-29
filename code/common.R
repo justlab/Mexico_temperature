@@ -12,6 +12,11 @@ crs.lonlat = 4326 # https://epsg.io/4326
 crs.mexico.city = 6369 # https://epsg.io/6369
 crs.satellite = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
 
+earliest.date = "2003-01-01"
+  # The earliest date we're interested in.
+latest.year = 2018L
+  # The last year we're interested in.
+
 study.area.buffer.meters = 50e3
 
 pred.area = function()

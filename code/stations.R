@@ -31,10 +31,6 @@ suppressPackageStartupMessages(
 source("common.R")
 source("../Just_universal/code/punl.R")
 
-earliest.date = "2003-01-01"
-  # The earliest date we're interested in.
-latest.year = 2018L
-  # The last year we're interested in.
 proportion.of.day.required = .75
 
 # In the output, all dates signify UTC-06:00 (except for Wunderground).
