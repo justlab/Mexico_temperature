@@ -38,12 +38,7 @@ suppressPackageStartupMessages(
     library(caret)
     library(stringr)})
 
-source("../Just_universal/code/pairmemo.R")
-pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
-
-c(get.ground, in.study.area, pred.area, crs.lonlat, crs.mexico.city) %<-% local(
-   {source("stations.R", local = T)
-    list(get.ground, in.study.area, pred.area, crs.lonlat, crs.mexico.city)})
+source("common.R")
 
 satellite.temperature.dir = "/data-belle/Mexico_temperature/lst_c006/mex.lst"
 satellite.vegetation.dir = "/data-belle/Mexico_temperature/ndvi_c006"
@@ -64,7 +59,6 @@ master.grid.year = 2012L
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 satellite.tiles = c("h08v06", "h08v07")
   # https://modis-land.gsfc.nasa.gov/MODLAND_grid.html
-crs.satellite = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
 
 temp.ground.vars = c(
     "ground.temp.lo", "ground.temp.mean", "ground.temp.hi")
@@ -103,9 +97,13 @@ get.nonsatellite.data = function()
     stopifnot(!anyNA(master.grid$elevation))
 
     message("Loading data from ground stations")
-    stations = copy(get.ground()$stations)
-    ground = copy(get.ground()$obs)
+    stations = as.data.table(get.ground()$stations)
+    ground = as.data.table(get.ground()$obs)
 
+    setkey(stations, stn)
+    stations[, network := factor(network)]
+
+    ground[, date := as.Date(date)]
     setnames(ground,
         c("temp.C.min", "temp.C.mean", "temp.C.max"),
         temp.ground.vars)

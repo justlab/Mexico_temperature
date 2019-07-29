@@ -3,17 +3,17 @@ suppressPackageStartupMessages(
     library(sf)
     library(ggplot2)})
 
+source("common.R")
+
 l = local(
    {source("modeling.R")
-    list(master.grid, ground, stations, pred.area, predict.temps, per.mrow.population, crs.satellite, all.agebs.year)})
+    list(master.grid, ground, stations, predict.temps, per.mrow.population, all.agebs.year)})
 master.grid = l[[1]]
 ground = l[[2]]
 stations = l[[3]]
-pred.area = l[[4]]
-predict.temps = l[[5]]
-per.mrow.population = l[[6]]
-crs.satellite = l[[7]]
-all.agebs.year = l[[8]]
+predict.temps = l[[4]]
+per.mrow.population = l[[5]]
+all.agebs.year = l[[6]]
 
 base.size = 14
 

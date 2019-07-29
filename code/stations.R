@@ -1,4 +1,4 @@
-# The main entry point is `get.ground`.
+# The main entry point is `save.ground`.
 
 # The tag "XTRA" is used to mark places where I've omitted
 # support for certain rare formats of the station files. By adding
@@ -19,18 +19,17 @@ suppressPackageStartupMessages(
     library(readxl)
     library(XML)
     library(DBI)
+    library(RSQLite)
+    library(jsonlite)
     library(stringr)
+    library(readr)
     library(measurements)
     library(pbapply)
     library(sf)
     library(nngeo)})
 
-source("../Just_universal/code/pairmemo.R")
-pairmemo.dir = "/data-belle/Mexico_temperature/pairmemo"
+source("common.R")
 source("../Just_universal/code/punl.R")
-
-data.root = "/data-union/Mexico_temperature"
-wunderground.db.path = "/data-belle/wunderground/wunderground-daily-mexico.sqlite"
 
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
@@ -40,12 +39,7 @@ proportion.of.day.required = .75
 target.tz = "Etc/GMT+6"
   # Yes, the sign is intepreted in the opposite fashion from usual.
 
-crs.lonlat = 4326 # https://epsg.io/4326
-crs.mexico.city = 6369 # https://epsg.io/6369
-
 spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-
-study.area.buffer.meters = 50e3
 
 ## ------------------------------------------------------------
 ## * Subroutines
@@ -122,23 +116,6 @@ rename.cols = function(d, originals, target)
 
 is.subset = function(needles, haystack)
     !length(setdiff(needles, haystack))
-
-pred.area = function()
-    st_read(quiet = T, file.path(data.root, "mxcity_megalopolis"))
-      # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
-pred.area = pairmemo(pred.area, pairmemo.dir, mem = T)
-
-study.area = function()
-   {b = st_bbox(st_transform(crs = crs.lonlat,
-        st_buffer(pred.area(), study.area.buffer.meters)))
-    f = function(z) round(unname(z), 1)
-    list(left = f(b$xmin), right = f(b$xmax),
-        bottom = f(b$ymin), top = f(b$ymax))}
-study.area = pairmemo(study.area, pairmemo.dir, mem = T)
-
-in.study.area = function(lon, lat)
-    lon >= study.area()$left & lon <= study.area()$right &
-    lat >= study.area()$bottom & lat <= study.area()$top
 
 ## ------------------------------------------------------------
 ## * Per-network functions
@@ -699,7 +676,8 @@ es.stations = function(obs, emas = F)
 # not `target.tz`.
 
 get.ground.raw.wunderground = function()
-   {db = dbConnect(RSQLite::SQLite(), wunderground.db.path)
+   {db = dbConnect(SQLite(),
+        stpath("wunderground-daily-mexico.sqlite"))
     stations = as.data.table(dbGetQuery(db, "select
             stn, lon, lat
         from Stations"))
@@ -722,9 +700,12 @@ get.ground.raw.wunderground = function()
 ## * All-network functions
 ## ------------------------------------------------------------
 
-get.ground = function()
-   do.call(filter.raw, get.ground.raw())
-get.ground = pairmemo(get.ground, pairmemo.dir, mem = T)
+save.ground = function()
+   {on.exit(close(con))
+    con = gzfile(ground.json.path)
+    cat(file = con, toJSON(
+        dataframe = "columns", digits = NA, na = "null",
+        do.call(filter.raw, get.ground.raw())))}
 
 get.ground.raw = function()
    {networks = list(
