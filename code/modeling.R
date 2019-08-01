@@ -32,16 +32,18 @@ suppressPackageStartupMessages(
     library(lme4)
     library(optimx)
     library(ape)
+    library(httr)
     library(sf)
     library(future.apply)
     library(zeallot)
     library(caret)
-    library(stringr)})
+    library(stringr)
+    library(pbapply)})
 
 source("common.R")
 
 satellite.dir = file.path(data.root, "satellite")
-elevation.path = file.path(data.root, "elevation/srtm30_extracted.fst")
+elevation.dir = file.path(data.root, "elevation")
 mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
 all.agebs.path = file.path(data.root, "agebs_2010")
 all.agebs.year = 2010L
@@ -92,14 +94,17 @@ get.nonsatellite.data = function()
             if (any(v)) which(v) else NA))})]
     master.grid[, in.pred.area := !is.na(region)]
 
-    message("Loading elevation")
-    # Read from fst files produced by `prepare_elevation_mex.Rmd`.
-    elevation = read_fst(elevation.path, as.data.table = T)[
-        in.study.area(x, y)]
-    set.mrows(elevation, "x", "y")
-    stopifnot(!anyDuplicated(elevation$mrow))
-    master.grid[elevation$mrow, elevation := elevation$elev_filtered]
-    stopifnot(!anyNA(master.grid$elevation))
+    local(
+      {message("Reading elevation files")
+       elev = rbindlist(pblapply(elevation.paths(), function(path)
+          {d = as.data.table(as(raster(path), "SpatialPointsDataFrame"))
+           setnames(d, c("elevation", "lon", "lat"))
+           d[in.study.area(lon, lat)]}))
+       message("Finding elevation for grid points")
+       nn = get.knnx(k = 1,
+           elev[, .(lon, lat)],
+           master.grid[, .(lon, lat)])$nn.index[,1]
+       master.grid[, elevation := elev[nn, elevation]]})
 
     message("Loading data from ground stations")
     stations = as.data.table(get.ground()$stations)
@@ -188,12 +193,6 @@ satellite.paths = function(satellite, product, the.year)
 
 download.satellite = function(satellite, product, the.year)
    {message(paste("Downloading satellite data for", satellite, product, the.year))
-    suppressPackageStartupMessages(library(httr))
-
-    creds = Sys.getenv(names = F,
-        c("EARTHDATA_USERNAME", "EARTHDATA_PASSWORD"))
-    if (any(creds == ""))
-        stop("You need to set the environment variables EARTHDATA_USERNAME and EARTHDATA_PASSWORD. If you don't have an account, you can get one at https://urs.earthdata.nasa.gov/users/new")
 
     base.url = sprintf("https://e4ftl01.cr.usgs.gov/MOL%s/%s%s.006",
         substr(toupper(satellite), 1, 1),
@@ -217,10 +216,38 @@ download.satellite = function(satellite, product, the.year)
                 sprintf('<a href="([^"]+?\\.%s\\.[^"]+\\.hdf)"', tile))[,2]
             message("Getting ", fname)
             r = GET(paste0(the.dir, "/", fname),
-                authenticate(creds[1], creds[2]))
+                authenticate(earthdata.creds()[1], earthdata.creds()[2]))
             stop_for_status(r)
             writeBin(content(r, "raw"),
                 file.path(satellite.dir, product, fname))}}}
+
+earthdata.creds = function()
+   {creds = Sys.getenv(names = F,
+        c("EARTHDATA_USERNAME", "EARTHDATA_PASSWORD"))
+    if (any(creds == ""))
+        stop("You need to set the environment variables EARTHDATA_USERNAME and EARTHDATA_PASSWORD. If you don't have an account, you can get one at https://urs.earthdata.nasa.gov/users/new")
+    creds}
+
+elevation.paths = function()
+  # Gets the paths to elevation files, downloading them if necessary.
+   {base.url = "https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11"
+    squares = as.data.table(with(study.area(), expand.grid(
+        lon = floor(left) : ceiling(right),
+        lat = floor(bottom) : ceiling(top))))
+    squares = squares[!(lon == -97 & lat == 21)]
+      # This square is all water, so there's no elevation file for it.
+    for (i in 1 : nrow(squares))
+       {fname = sprintf("N%02dW%03d.SRTMGL1.hgt.zip",
+            squares[i, lat],
+            -squares[i, lon])
+        if (file.exists(file.path(elevation.dir, fname)))
+            next
+        message("Downloading ", fname)
+        r = GET(paste0(base.url, "/", fname),
+            authenticate(earthdata.creds()[1], earthdata.creds()[2]))
+        stop_for_status(r)
+        writeBin(content(r, "raw"), file.path(elevation.dir, fname))}
+    list.files(elevation.dir, full = T)}
 
 read.satellite.file = function(fpath, product, full.grid = F)
    {suppressPackageStartupMessages(
