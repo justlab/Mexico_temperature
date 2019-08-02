@@ -27,10 +27,8 @@
 
 suppressPackageStartupMessages(
    {library(data.table)
-    library(fst)
     library(FNN)
     library(lme4)
-    library(optimx)
     library(ape)
     library(httr)
     library(sf)
