@@ -37,4 +37,6 @@ in.study.area = function(lon, lat)
     lat >= study.area()$bottom & lat <= study.area()$top
 
 get.ground = function()
-    fromJSON(gzfile(ground.json.path))
+    sapply(simplify = F, fromJSON(gzfile(ground.json.path)),
+        as.data.table)
+get.ground = pairmemo(get.ground, pairmemo.dir, mem = T)

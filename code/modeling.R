@@ -95,8 +95,8 @@ get.nonsatellite.data = function()
        master.grid[, elevation := elev[nn, elevation]]})
 
     message("Loading data from ground stations")
-    stations = as.data.table(get.ground()$stations)
-    ground = as.data.table(get.ground()$obs)
+    stations = get.ground()$stations
+    ground = get.ground()$obs
 
     setkey(stations, stn)
     stations[, network := factor(network)]
