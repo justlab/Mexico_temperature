@@ -36,13 +36,13 @@ suppressPackageStartupMessages(
     library(zeallot)
     library(caret)
     library(stringr)
-    library(pbapply)})
+    library(raster)})
 
 source("common.R")
 
-c(full.satellite.grid, get.satellite.data) %<-% local(
+c(full.satellite.grid, get.satellite.data, get.elevation) %<-% local(
    {source("earthdata.R")
-    list(full.satellite.grid, get.satellite.data)})
+    list(full.satellite.grid, get.satellite.data, get.elevation)})
 
 mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
 all.agebs.path = file.path(data.root, "agebs_2010")
@@ -83,16 +83,11 @@ get.nonsatellite.data = function()
     master.grid[, in.pred.area := !is.na(region)]
 
     local(
-      {message("Reading elevation files")
-       elev = rbindlist(pblapply(elevation.paths(), function(path)
-          {d = as.data.table(as(raster(path), "SpatialPointsDataFrame"))
-           setnames(d, c("elevation", "lon", "lat"))
-           d[in.study.area(lon, lat)]}))
-       message("Finding elevation for grid points")
-       nn = get.knnx(k = 1,
-           elev[, .(lon, lat)],
-           master.grid[, .(lon, lat)])$nn.index[,1]
-       master.grid[, elevation := elev[nn, elevation]]})
+       {message("Loading elevation")
+        elev = get.elevation()
+        message("Extracting")
+        mg = st_as_sf(master.grid, coords = c("lon", "lat"), crs = crs.lonlat)
+        master.grid[, elevation := extract(elev, mg)]})
 
     message("Loading data from ground stations")
     stations = get.ground()$stations

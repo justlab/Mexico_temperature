@@ -5,7 +5,8 @@ suppressPackageStartupMessages(
     library(gdalUtils)
     library(future.apply)
     library(stringr)
-    library(httr)})
+    library(httr)
+    library(pbapply)})
 
 source("common.R")
 
@@ -142,6 +143,24 @@ read.satellite.file = function(fpath, product, full.grid = F)
             # Missing points have already been thrown out.
             stopifnot(!anyNA(d))}}
     d}
+
+get.elevation = function()
+   {message("Joining elevation files")
+    elev = do.call(mosaic, c(
+        list(fun = mean, na.rm = T),
+        lapply(elevation.paths(), raster)))
+    message("Filtering")
+    incr = (res(elev)[1] * 1000) / (30 * 2)
+      # resolution, 1000m, div by 30m,
+      # div by 2 for radius instead of diameter
+    res.grow.factor = 5
+    elev = focal(x = elev, w = focalWeight(elev,
+        c(res(elev)[1] * res.grow.factor, incr), "Gauss"))
+    message("Reading all")
+    elev = readAll(elev)
+    message("Saving")
+    elev}
+get.elevation = pairmemo(get.elevation, pairmemo.dir)
 
 elevation.paths = function()
   # Gets the paths to elevation files, downloading them if necessary.
