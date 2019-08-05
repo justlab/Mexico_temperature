@@ -20,7 +20,7 @@ latest.year = 2018L
 study.area.buffer.meters = 50e3
 
 pred.area = function()
-    st_read(quiet = T, file.path(data.root, "mxcity_megalopolis"))
+    st_read(quiet = T, file.path(data.root, "geography", "mxcity_megalopolis"))
       # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
 pred.area = pairmemo(pred.area, pairmemo.dir, mem = T)
 

@@ -11,7 +11,6 @@ suppressPackageStartupMessages(
 source("common.R")
 
 satellite.dir = file.path(data.root, "satellite")
-elevation.dir = file.path(data.root, "elevation")
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 satellite.product.codes = c(temperature = "11A1", vegetation = "13A3")
@@ -170,6 +169,7 @@ elevation.paths = function()
         lat = floor(bottom) : ceiling(top))))
     squares = squares[!(lon == -97 & lat == 21)]
       # This square is all water, so there's no elevation file for it.
+    elevation.dir = file.path(satellite.dir, "elevation")
     for (i in 1 : nrow(squares))
        {fname = sprintf("N%02dW%03d.SRTMGL1.hgt.zip",
             squares[i, lat],

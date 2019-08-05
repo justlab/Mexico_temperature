@@ -603,7 +603,7 @@ per.mrow.population = function(pop.col)
                 diff(sort(unique(y_sinu)))))])))
 
     message("Getting AGEBs")
-    path = file.path(data.root, paste0("agebs_", all.agebs.year))
+    path = file.path(data.root, "geography", paste0("agebs_", all.agebs.year))
     if (!length(list.files(path)))
        {message("Downloading")
         r = GET("http://datamx.io/dataset/a3d477e3-573a-408c-85aa-bcc6e3a8d714/resource/60aa0982-b8fa-4fb7-9e48-c3c45341c972/download/agebmexico2010.zip")
