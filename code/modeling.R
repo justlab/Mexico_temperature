@@ -44,9 +44,8 @@ c(full.satellite.grid, get.satellite.data, get.elevation) %<-% local(
    {source("earthdata.R")
     list(full.satellite.grid, get.satellite.data, get.elevation)})
 
-mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
-all.agebs.path = file.path(data.root, "agebs_2010")
 all.agebs.year = 2010L
+mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
 population.path.fmt = "~/Jdrive/PM/Just_Lab/projects/airmex/data/population/%s_cuadratic_csv"
 
 plan(multiprocess)
@@ -604,7 +603,19 @@ per.mrow.population = function(pop.col)
                 diff(sort(unique(y_sinu)))))])))
 
     message("Getting AGEBs")
-    agebs = st_transform(crs = crs.satellite, read_sf(all.agebs.path))
+    path = file.path(data.root, paste0("agebs_", all.agebs.year))
+    if (!length(list.files(path)))
+       {message("Downloading")
+        r = GET("http://datamx.io/dataset/a3d477e3-573a-408c-85aa-bcc6e3a8d714/resource/60aa0982-b8fa-4fb7-9e48-c3c45341c972/download/agebmexico2010.zip")
+        stop_for_status(r)
+        writeBin(content(r, "raw"), file.path(path, "download.zip"))
+        unzip(file.path(path, "download.zip"), exdir = path)
+        unlink(file.path(path, "download.zip"))
+        for (item in list.files(path, full = T))
+            file.rename(item, file.path(path, sprintf("agebs_%d.%s",
+                all.agebs.year, tools::file_ext(item))))}
+    message("Reading")
+    agebs = st_transform(crs = crs.satellite, read_sf(path))
 
     message("Intersecting")
     agebs$ageb.area = st_area(agebs)
