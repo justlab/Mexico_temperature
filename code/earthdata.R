@@ -27,7 +27,10 @@ full.satellite.grid = function()
         grep(value = T, "\\.A\\d{4}001\\.[^/]+$",
             satellite.paths("aqua", "vegetation", full.grid.year))))
 
-get.satellite.data = function(master.grid, satellite, product, the.year)
+get.satellite.data = function(satellite, product, the.year)
+  # N.B. This function implicitly uses `master.grid`, from `modeling.R`.
+  # It's not passed in as an argument so it's not serialized by
+  # `pairmemo`.
    {stopifnot(satellite %in% c("terra", "aqua"))
     stopifnot(product %in% c("temperature", "vegetation"))
     message("Loading satellite data: ", paste(satellite, product, the.year))

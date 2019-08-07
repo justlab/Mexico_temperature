@@ -177,15 +177,13 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     # Merge in satellite data.
     d = local(
        {for (satellite in c("terra", "aqua"))
-           {st = get.satellite.data(master.grid, satellite,
-                "temperature", the.year)
+           {st = get.satellite.data(satellite, "temperature", the.year)
             message("Merging in ", satellite, " temperature")
             d = merge(d, st, by = c("mrow", "yday"), all.x = T)
             setnames(d,
                 c("temp.day", "temp.night"),
                 paste0(satellite, c(".temp.day", ".temp.night")))
-            sv = get.satellite.data(master.grid, satellite,
-                "vegetation", the.year)
+            sv = get.satellite.data(satellite, "vegetation", the.year)
             message("Merging in ", satellite, " NDVI")
             d = merge(d, sv, by = c("mrow", "month"), all.x = T)
             # Very rarely, NDVI is missing. In such cases, set it
