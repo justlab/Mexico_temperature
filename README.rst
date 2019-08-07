@@ -1,19 +1,56 @@
-This is a repository for a model to predict temperature in an area around Mexico City, and the code to assemble a dataset for it.
+In this project, "A spatiotemporal reconstruction of daily ambient temperature using satellite data in the Megalopolis of Central Mexico from 2003–2018", we built a model to predict the mean, maxmimum, and minimum temperature on each day at each square in a 1-km grid for an area around Mexico City.
 
-We use several sources of data:
+Raw and processed data, including predictions, as well as the manuscript and a research notebook, can be found on Zenodo at … XXX
 
-- Files for these networks are automatically downloaded by ``stations.R``.
+The bulk of the data-processing and data-analysis code can be found on GitHub at https://github.com/justlab/Mexico_temperature . Other code is embedded inline in the manuscript and notebook.
 
-  - SIMAT: The Sistema de Monitoreo Atmosférico de la Ciudad de México (SIMAT), which includes the Red de Meteorología y Radiación Solar (REDMET) and the Red de Depósito Atmosférico (REDDA). Website: http://www.aire.cdmx.gob.mx
-  - UNAM: The Programa de Estaciones Meteorológicas del Bachillerato Universitario (PEMBU) at the Universidad Nacional Autónoma de México (UNAM). Website: https://www.ruoa.unam.mx/pembu
+Instructions
+============================================================
 
-- Files from one family of networks have to be obtained in person, or by mailing a USB stick or hard drive. But information about ESIMEs and EMAs stations (specifically, their longitudes and latitudes) is automatically downloaded.
+Getting the predictions
+------------------------------------------------------------
 
-  - SMN: The Servicio Meteorológico Nacional México (SMN), which includes an apparently unnamed network of observatories (contact person: Adolfo Portocarrero Reséndiz; adolfo.portocarrero@conagua.gob.mx; (55) 2636-4600; Av. Observatorio 192, Col. Observatorio, Del. Miguel Hidalgo. C.P. 11860, México). It also includes the Estación Sinóptica Meteorológica (ESIMEs) network and the Estación Meteorológica Automática (EMAs) network (contact person: Lic. Moisés Espinosa Cárdenas; moises.espinosa@conagua.gob.mx; 01-(55)-26-36-46-00 extension 3484).
+If you'd just like to examine or use our predictions without running any of our code, take a look at the HDF5 files in ``predictions``. There's one file per year. Each file has a three-dimensional array ``data`` with an attribute ``dimensions`` naming the dimensions (location, time, and variable) and a group ``dimension_labels`` naming each index of each dimension. The temperatures are in degrees Celsius. ``mrow`` values are row indices of the master grid, which can be found in ``master_grid.h5``. The original coordinates of the grid (in which it is, in fact, a regular grid) are ``x_sinu`` and ``y_sinu``, which are in the coordinate reference system ``crs.satellite``, defined in ``common.R`` as ``"+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"``.
 
-      - Since R's ``readxl`` package has difficulty with the EMAs Excel files, I use LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 --max-procs 10 soffice --headless --convert-to csv --outdir /data-belle/Mexico_temperature/stations/smn-emas-csv )``. This took about 1 hour 45 min on Belle.
+Here's how you could plot the mean temperatures for 5 July 2012 in R::
 
-- Files from Weather Underground can be downloaded or obtained from archives of previous downloads.
+    library(hdf5r)
+    library(ggplot2)
+
+    h5 = H5File$new("predictions/2012.h5", mode = "r")
+    preds = h5[["data"]][,,]
+    dimnames(preds) = sapply(simplify = F,
+        h5attr(h5[["data"]], "dimensions"),
+        function(k) h5[["dimension_labels"]][[k]][])
+    preds = preds[, "2012-07-05", "pred.ground.temp.mean"]
+    h5$close_all()
+
+    h5 = H5File$new("master_grid.h5", mode = "r")
+    g = h5[["master_grid"]][]
+    h5$close_all()
+    g$pred = preds[as.character(g$mrow)]
+
+    ggplot(g[!is.na(g$pred),]) +
+        geom_raster(aes(x_sinu, y_sinu, fill = pred))
+
+Getting the ground-station observations
+------------------------------------------------------------
+
+We put a lot of effort into cleaning and unifying daily observations of air temperature (and wind speed, precipitation, and air pressure) from several different sources. We provide all the original raw data on Zenodo, but if you'd like to use the processed observations without running any of the processing code, use the file ``ground.json.gz``, which has information about the observations as well as the stations they come from. To open this file in R, it suffices to say ``jsonlite::fromJSON(gzfile("ground.json.gz")``.
+
+Running the code
+------------------------------------------------------------
+
+To reproduce our results, you have the option of starting from scratch, that is, generating ``ground.json.gz`` from the raw station data, or of taking ``ground.json.gz`` as given and moving on from there. Either way, you'll need to install any libraries required by ``library(...)`` calls in the file you're using, and you'll need to copy the non-package depedency ``Just_universal`` (available at https://github.com/justlab/Just_universal ) into the ``Mexico_temperature`` repository (so the ``Just_universal`` directory should sit beside ``Mexico_temperature``'s ``code`` directory). Finally, set the environment variable ``JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT`` to the directory containing the data from Zenodo.
+
+To generate ``ground.json.gz``, source ``stations.R`` and call ``save.ground()``. You'll need the ``geography`` and ``stations`` data from Zenodo.
+
+To perform cross-validation and generate predictions, source ``modeling.R``. You'll need all the data from Zenodo except ``stations``. You can then do cross-validation and summarize the results with a call like ``summarize.cv.results(run.cv(2012L, "ground.temp.mean"))`` or get all the predictions for a year with a call like ``predict.temps(2012L, "pred.area")``.
+
+Notes
+============================================================
+
+Since R's ``readxl`` package has difficulty with the EMAs Excel files, I used LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 --max-procs 10 soffice --headless --convert-to csv --outdir /data-belle/Mexico_temperature/stations/smn-emas-csv )``. This took about 1 hour 45 min on one of our servers.
 
 License
 ============================================================
