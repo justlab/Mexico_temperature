@@ -89,6 +89,13 @@ get.nonsatellite.data = function()
         mg = st_as_sf(master.grid, coords = c("lon", "lat"), crs = crs.lonlat)
         master.grid[, elevation := extract(elev, mg)]})
 
+    message("Saving master grid as HDF5")
+    h5 = H5File$new(file.path(data.root, "master_grid.h5"), mode = "w")
+    h5[["master_grid"]] = transform(as.data.frame(master.grid), region =
+        factor(ifelse(is.na(region), "none", as.character(region))))
+          # hdf5r can't handle factors with NAs. https://github.com/hhoeflin/hdf5r/issues/29
+    h5$close_all()
+
     message("Loading data from ground stations")
     stations = copy(get.ground()$stations)
     ground = copy(get.ground()$obs)
