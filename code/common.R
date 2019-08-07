@@ -4,7 +4,7 @@ suppressPackageStartupMessages(
 
 source("../Just_universal/code/pairmemo.R")
 
-data.root = "/data-belle/Mextemp-temporary-testing"
+data.root = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT")
 pairmemo.dir = file.path(data.root, "pairmemo")
 ground.json.path = file.path(data.root, "ground.json.gz")
 
