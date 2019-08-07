@@ -36,7 +36,8 @@ suppressPackageStartupMessages(
     library(zeallot)
     library(caret)
     library(stringr)
-    library(raster)})
+    library(raster)
+    library(hdf5r)})
 
 source("common.R")
 
@@ -470,31 +471,72 @@ summarize.cv.results = function(multirun.output)
                 [, .(dv, network,
                     N, stn, sd, rmse, "sd - rmse" = sd - rmse)])}
 
+if (!exists("predict.temps.cache")) predict.temps.cache = list()
+
 predict.temps = function(the.year, mrow.set)
   # Predict a low, mean, and high temperature for every cell in
   # `mrow.set` and day in `the.year`.
-   {d = model.dataset(the.year, nonmissing.ground.temp = T)
-    d = rbind(
-        d,
-        model.dataset(the.year, mrow.set = mrow.set)[
-            !(paste(mrow, yday) %in% d[, paste(mrow, yday)])])
-    d[, ground.temp := NA_real_]
+   {if (mrow.set == "pred.area")
+       {path = file.path(data.root, "predictions",
+            paste0(the.year, ".h5"))
+        if (path %in% names(predict.temps.cache))
+            return(predict.temps.cache[[path]])}
 
-    message("Imputing non-temperature ground variables")
-    d = impute.nontemp.ground.vars(d, fold.i = NULL, progress = T)
+    if (mrow.set != "pred.area" || !file.exists(path)) local(
+       {d = model.dataset(the.year, nonmissing.ground.temp = T)
+        d = rbind(
+            d,
+            model.dataset(the.year, mrow.set = mrow.set)[
+                !(paste(mrow, yday) %in% d[, paste(mrow, yday)])])
+        d[, ground.temp := NA_real_]
 
-    for (dvname in temp.ground.vars)
-       {message("Training for ", dvname)
-        d[, ground.temp := get(dvname)]
-        f.pred = train.model(d[!is.na(ground.temp)])
-        message("Predicting ", dvname)
-        d[, paste0("pred.", dvname) := f.pred(.SD)]}
+        message("Imputing non-temperature ground variables")
+        d = impute.nontemp.ground.vars(d, fold.i = NULL, progress = T)
 
-    d = d[mrow %in% mrow.sets[[mrow.set]],
-        keyby = .(mrow, yday),
-        .SDcols = paste0("pred.", temp.ground.vars),
-        head(.SD, 1)]}
-predict.temps = pairmemo(predict.temps, pairmemo.dir, fst = T)
+        for (dvname in temp.ground.vars)
+           {message("Training for ", dvname)
+            d[, ground.temp := get(dvname)]
+            f.pred = train.model(d[!is.na(ground.temp)])
+            message("Predicting ", dvname)
+            d[, paste0("pred.", dvname) := f.pred(.SD)]}
+
+        d = d[mrow %in% mrow.sets[[mrow.set]],
+            keyby = .(mrow, yday),
+            .SDcols = paste0("pred.", temp.ground.vars),
+            head(.SD, 1)]
+
+        if (mrow.set != "pred.area")
+            return(d)
+
+        message("Writing HDF5")
+        h5 = H5File$new(path, mode = "w")
+        d = reshape2::acast(melt(d, id.vars = c("mrow", "yday")),
+            mrow ~ yday ~ variable)
+        h5[["data"]] = d
+        h5attr(h5[["data"]], "dimensions") = c(
+            "mrow", "date", "variable")
+        dl = h5$create_group("dimension_labels")
+        dl[["mrow"]] = as.integer(dimnames(d)[[1]])
+        dl[["date"]] = as.character(
+                as.Date(paste0(the.year - 1, "-12-31")) +
+                as.integer(dimnames(d)[[2]]))
+        dl[["variable"]] = dimnames(d)[[3]]
+        h5$close_all()})
+
+    message("Reading HDF5")
+    h5 = H5File$new(path, mode = "r")
+    d = h5[["data"]][,,]
+    dimnames(d) = sapply(simplify = F,
+        h5attr(h5[["data"]], "dimensions"),
+        function(k) h5[["dimension_labels"]][[k]][])
+    h5$close_all()
+    d = dcast(as.data.table(melt(d)),
+        mrow + date ~ variable)
+    d[, date := yday(as.Date(date))]
+    setnames(d, "date", "yday")
+    predict.temps.cache[[path]] <<- d
+
+    d}
 
 predict.temps.at = function(fname, date.col, lon.col, lat.col)
    {d = as.data.table(readRDS(fname)[,
