@@ -480,8 +480,9 @@ predict.temps = function(the.year, mrow.set)
   # Predict a low, mean, and high temperature for every cell in
   # `mrow.set` and day in `the.year`.
    {if (mrow.set == "pred.area")
-       {path = file.path(data.root, "predictions",
-            paste0(the.year, ".h5"))
+       {pred.dir = file.path(data.root, "predictions")
+        dir.create(pred.dir, showWarnings = F)
+        path = file.path(pred.dir, paste0(the.year, ".h5"))
         if (path %in% names(predict.temps.cache))
             return(predict.temps.cache[[path]])}
 

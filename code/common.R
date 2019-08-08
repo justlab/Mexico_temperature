@@ -6,6 +6,7 @@ source("../Just_universal/code/pairmemo.R")
 
 data.root = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT")
 pairmemo.dir = file.path(data.root, "pairmemo")
+dir.create(pairmemo.dir, showWarnings = F)
 ground.json.path = file.path(data.root, "ground.json.gz")
 
 crs.lonlat = 4326 # https://epsg.io/4326

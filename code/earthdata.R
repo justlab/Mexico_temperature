@@ -11,6 +11,7 @@ suppressPackageStartupMessages(
 source("common.R")
 
 satellite.dir = file.path(data.root, "satellite")
+dir.create(satellite.dir, showWarnings = F)
 
 satellite.codes = c(terra = "MOD", aqua = "MYD")
 satellite.product.codes = c(temperature = "11A1", vegetation = "13A3")
@@ -104,6 +105,7 @@ download.satellite = function(satellite, product, the.year)
             r = GET(paste0(the.dir, "/", fname),
                 authenticate(earthdata.creds()[1], earthdata.creds()[2]))
             stop_for_status(r)
+            dir.create(file.path(satellite.dir, product), showWarnings = F)
             writeBin(content(r, "raw"),
                 file.path(satellite.dir, product, fname))}}}
 
@@ -173,6 +175,7 @@ elevation.paths = function()
     squares = squares[!(lon == -97 & lat == 21)]
       # This square is all water, so there's no elevation file for it.
     elevation.dir = file.path(satellite.dir, "elevation")
+    dir.create(elevation.dir, showWarnings = F)
     for (i in 1 : nrow(squares))
        {fname = sprintf("N%02dW%03d.SRTMGL1.hgt.zip",
             squares[i, lat],
