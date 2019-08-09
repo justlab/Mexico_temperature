@@ -96,6 +96,9 @@ download.satellite = function(satellite, product, the.year)
        {the.dir = sprintf("%s/%s",
             base.url, format(dates[date.ix], "%Y.%m.%d"))
         page = GET(the.dir)
+        if (page$status == 404)
+           {message(paste("No directory for", dates[date.ix]))
+            next}
         stop_for_status(page)
 
         for (tile in satellite.tiles)
