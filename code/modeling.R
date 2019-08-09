@@ -93,6 +93,7 @@ get.nonsatellite.data = function()
     stns.by.dist = apply(stns.by.dist, 2, function(v)
         sort(stations$stn)[v])
 
+    message("Master grid and ground data loaded")
     list(master.grid, ground, stations, stns.by.dist)}
 get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
 
