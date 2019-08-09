@@ -101,6 +101,9 @@ download.satellite = function(satellite, product, the.year)
         for (tile in satellite.tiles)
            {fname = str_match(content(page, "text"),
                 sprintf('<a href="([^"]+?\\.%s\\.[^"]+\\.hdf)"', tile))[,2]
+            if (is.na(fname))
+               {message(paste("No data for", dates[date.ix], tile))
+                next}
             message("Getting ", fname)
             r = GET(paste0(the.dir, "/", fname),
                 authenticate(earthdata.creds()[1], earthdata.creds()[2]))
