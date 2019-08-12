@@ -131,7 +131,7 @@ read.satellite.file = function(fpath, product, full.grid = F)
         readGDAL(x, silent = T)))
     if (full.grid)
         g$band1 = 1
-    g = as(g, "SpatialPointsDataFrame")
+    g = suppressWarnings(as(g, "SpatialPointsDataFrame"))
     if (full.grid)
        {d = as.data.table(spTransform(g,
             "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
@@ -142,6 +142,7 @@ read.satellite.file = function(fpath, product, full.grid = F)
     else
        {d = as.data.table(g)
         setnames(d, str_subset(colnames(d), "band"), names(vars))
+        d = d[rowSums(!is.na(d[, mget(names(vars))])) > 0]
         if (product == "vegetation")
            {# The scale factor has already been applied, but by
             # multiplication instead of division, so divide by the
