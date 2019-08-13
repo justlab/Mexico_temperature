@@ -41,9 +41,13 @@ We put a lot of effort into cleaning and unifying daily observations of air temp
 Running the code
 ------------------------------------------------------------
 
-To reproduce our results, you have the option of starting from scratch, that is, generating ``ground.json.gz`` from the raw station data, or of taking ``ground.json.gz`` as given and moving on from there. Either way, you'll need to install any libraries required by ``library(...)`` calls in the file you're using, and you'll need to copy the non-package depedency ``Just_universal`` (available at https://github.com/justlab/Just_universal ) into the ``Mexico_temperature`` repository (so the ``Just_universal`` directory should sit beside ``Mexico_temperature``'s ``code`` directory). Finally, set the environment variable ``JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT`` to the directory containing the data from Zenodo.
+To reproduce our results, you have the option of starting from scratch, that is, generating ``ground.json.gz`` from the raw station data, or of taking ``ground.json.gz`` as given and moving on from there. Either way, you'll need to:
 
-To generate ``ground.json.gz``, source ``stations.R`` and call ``save.ground()``. You'll need to download and uncompress the ``geography`` and ``stations`` data from Zenodo.
+1. Install any libraries required by ``library(...)`` calls in the file you're using.
+2. Copy the non-package depedency ``Just_universal`` (available at https://github.com/justlab/Just_universal ) into the ``Mexico_temperature`` repository (so the ``Just_universal`` directory should sit beside ``Mexico_temperature``'s ``code`` directory).
+3. Set the environment variable ``JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT`` to the directory containing the data from Zenodo.
+
+To generate ``ground.json.gz``, source ``stations.R``. You'll need to download and uncompress the ``geography`` and ``stations`` data from Zenodo. You can then call ``save.ground()``.
 
 To perform cross-validation and generate predictions, source ``modeling.R``. You'll need ``geography`` (uncompressed) and ``ground.json.gz`` (left compressed) from Zenodo. You can then do cross-validation and summarize the results with a call like ``summarize.cv.results(run.cv(2012L, "ground.temp.mean"))`` or get all the predictions for a year with a call like ``predict.temps(2012L, "pred.area")``.
 
