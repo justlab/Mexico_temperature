@@ -10,9 +10,11 @@ Instructions
 Getting the temperature predictions
 ------------------------------------------------------------
 
-To examine or use our temperature predictions without running any of our code, take a look at the HDF5 files ``predictions_*.h5``. There's one file per year. Each file has a three-dimensional array ``data`` with an attribute ``dimensions`` naming the dimensions (location, time, and variable) and a group ``dimension_labels`` naming each index of each dimension. The temperatures are in degrees Celsius, and the dates indicate 24-hour spans of UTC-06:00. ``mrow`` values are row indices of the master grid, which can be found in ``master_grid.h5``. The original coordinates of the grid (in which it is, in fact, a regular grid) are ``x_sinu`` and ``y_sinu``, which are in the coordinate reference system ``crs.satellite``, defined in ``common.R`` as ``"+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"``.
+To examine or use our temperature predictions without running any of our code, take a look at the `HDF5 <http://portal.hdfgroup.org/display/HDF5/Introduction+to+HDF5>`_ files ``predictions_*.h5``. There's one file per year. Each file has a three-dimensional array ``data`` with an attribute ``dimensions`` naming the dimensions (location, time, and variable) and a group ``dimension_labels`` naming each index of each dimension. The temperatures are in degrees Celsius, and the dates indicate 24-hour spans of UTC-06:00. ``mrow`` values are row indices of the master grid, which can be found in ``master_grid.h5``. The original coordinates of the grid (in which it is, in fact, a regular grid) are ``x_sinu`` and ``y_sinu``, which are in the coordinate reference system ``crs.satellite``, defined in ``common.R`` as ``"+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"``, which is the `MODIS global sinusoidal projection <https://modis-land.gsfc.nasa.gov/MODLAND_grid.html>`_.
 
-Here's how you could plot the mean temperatures for 5 July 2012 in R::
+Here's how you could plot the mean temperatures for 5 July 2012 in R
+
+.. code-block:: R
 
     library(hdf5r)
     library(ggplot2)
@@ -36,7 +38,7 @@ Here's how you could plot the mean temperatures for 5 July 2012 in R::
 Getting the ground-station observations
 ------------------------------------------------------------
 
-We put a lot of effort into cleaning and unifying daily observations of air temperature (and wind speed, precipitation, and air pressure) from several different sources. We provide all the original raw data on Zenodo, but if you'd like to use the processed observations without running any of the processing code, use the file ``ground.json.gz``, which has information about the observations as well as the stations they come from. To open this file in R, it suffices to say ``jsonlite::fromJSON(gzfile("ground.json.gz"))``. Again, dates are in UTC-06:00.
+We put a lot of effort into cleaning and unifying daily observations of air temperature (and wind speed, precipitation, and air pressure) at ground weather stations from several different sources. We provide all the original raw data on Zenodo, but if you'd like to use the processed observations without running any of the processing code, use the `JSON <https://www.json.org>`_ file ``ground.json.gz``, which has information about the observations as well as the stations they come from. To open this file in R, run ``jsonlite::fromJSON(gzfile("ground.json.gz"))``. Again, dates are in UTC-06:00.
 
 Running the code
 ------------------------------------------------------------
