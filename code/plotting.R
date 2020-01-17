@@ -154,3 +154,42 @@ pop.map = function(pop.col, thresholds.tempC = NULL)
            legend.position = "bottom", legend.key.width = unit(20, "mm"))
 
     p}
+
+time.series.plot = function()
+   {stns = c("Mexico City" = 8, Morelos = 24)
+    years = c(2010L, 2018L)
+    mon = 6
+
+    # Get cross-validated predictions.
+    d = rbindlist(lapply(years, function(y)
+        (run.cv(y, "ground.temp.mean")
+            [stn %in% unname(stns),
+                c(.SD, .(date = lubridate::make_date(y, 1, 1) - 1 + yday))]
+            [month(date) == mon,
+                .(stn, year, mday = mday(date), pred, ground.temp)])))
+    # Verify that we have a prediction for every day at `stns` in
+    # `years`.
+    d[, by = .(stn, year), stopifnot(.N ==
+        lubridate::days_in_month(lubridate::make_date(year, mon, 1)))]
+    # Reshape the data.
+    d = melt(d, id.vars = c("stn", "year", "mday"),
+        variable.name = "type", value.name = "temp")
+    d[, type := factor(ifelse(type == "pred", "Predicted", "Observed"))]
+    d[, stn := factor(names(stns)[match(stn, stns)])]
+
+    ggplot(d, aes(mday, temp, color = type, group = type)) +
+        geom_point() +
+        geom_line() +
+        facet_grid(stn ~ year) +
+        scale_x_continuous(name = "Day of June",
+            breaks = c(1, 10, 20, 30)) +
+        scale_y_continuous(name = "Temperature (°C)",
+            breaks = seq(15, 30, by = 5),
+            limits = c(15, 30),
+            expand = c(0, 0)) +
+        labs(color = "") +
+        theme_bw() +
+        theme(
+           axis.text = element_text(color = "black"),
+           panel.grid.major.x = element_blank(),
+           panel.grid.minor = element_blank())}
