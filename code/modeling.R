@@ -498,8 +498,7 @@ predict.temps = function(the.year, mrow.set)
     d}
 
 predict.temps.at = function(fname, date.col, lon.col, lat.col)
-   {d = as.data.table(readRDS(fname)[,
-        c(date.col, lon.col, lat.col)])
+   {d = fread(fname)[, mget(c(date.col, lon.col, lat.col))]
     setnames(d, c("date", "lon", "lat"))
     set.mrows(d, "lon", "lat")
     d[, yday := yday(date)]
@@ -508,39 +507,16 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         predict.temps(y, "pred.area")[.(.SD$mrow, .SD$yday),
             mget(paste0("pred.", temp.ground.vars))]]
 
-    # Also find the temperature statistics of the nearest ground
-    # station.
-    message("Getting nearest temperatures")
-    g = copy(ground)
-    setkey(g, stn, date)
-    d[, paste0("nearest.", temp.ground.vars) :=
-        rbindlist(lapply(1 : .N, function(r)
-           {the.date = date[r]
-            for (the.stn in stns.by.dist[mrow[r],])
-               {gr = g[.(the.stn, the.date), mget(temp.ground.vars)]
-                if (!anyNA(gr))
-                    return(gr)}
-            stop()}))]
-
-    # Also get some crude predictions of precipitation, via
-    # inverse-distance weighting (IDW).
-    message("Predicting precipitation")
-    precip = merge(
-        get.ground()$obs[, .(stn, date, precipitation.mm.total)],
-        get.ground()$stations[, .(stn, lon, lat)],
-        all.x = T, all.y = F,
-        by = "stn")[!is.na(precipitation.mm.total)]
-    d[, by = date, precipitation.mm := gstat::idw(
-        formula = precipitation.mm.total ~ 1,
-        locations = ~ lon + lat,
-        data = precip[date == .BY$date],
-        newdata = .SD,
-        debug.level = 0)[, "var1.pred"]]
+    # Also find the mean of all SIMAT stations for each day.
+    simat.daily.means = with(get.ground(), obs[
+        stn %in% stations[network == "simat", stn],
+        keyby = date,
+        mean(temp.C.mean, na.rm = T)])
+    d[, simat.ground.temp.mean := simat.daily.means[.(d$date), V1]]
 
     d[, mget(c(
         paste0("model.", temp.ground.vars),
-        paste0("nearest.", temp.ground.vars),
-        "precipitation.mm"))]}
+        "simat.ground.temp.mean"))]}
 
 per.mrow.population = function(pop.col)
    {message("Making subgrid")
