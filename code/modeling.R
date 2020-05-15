@@ -492,6 +492,7 @@ predict.temps = function(the.year, mrow.set)
         mrow + date ~ variable)
     d[, date := yday(as.Date(date))]
     setnames(d, "date", "yday")
+    setkey(d, mrow, yday)
     predict.temps.cache[[path]] <<- d
 
     d}
