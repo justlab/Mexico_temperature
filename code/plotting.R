@@ -193,3 +193,25 @@ time.series.plot = function()
            axis.text = element_text(color = "black"),
            panel.grid.major.x = element_blank(),
            panel.grid.minor = element_blank())}
+
+pred.error.plot = function()
+   {the.year = 2018L
+
+    d = run.cv(the.year, "ground.temp.mean")[!is.na(pred)]
+    d[, season := months2seasons[month(
+        lubridate::make_date(the.year, 1, 1) - 1 + yday)]]
+
+    ggplot(d) +
+        geom_density(aes(pred - ground.temp), bw = .1) +
+        facet_grid(season ~ .) +
+        xlab("Prediction error") +
+        scale_y_continuous(limits = c(0, .4)) +
+        coord_cartesian(xlim = c(-10, 5), expand = F) +
+        theme_bw() +
+        theme(
+           axis.text = element_text(color = "black"),
+           panel.grid.major = element_blank(),
+           panel.grid.minor = element_blank(),
+           axis.title.y = element_blank(),
+           axis.text.y = element_blank(),
+           axis.ticks.y = element_blank())}
