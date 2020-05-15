@@ -13,6 +13,26 @@ crs.lonlat = 4326 # https://epsg.io/4326
 crs.mexico.city = 6369 # https://epsg.io/6369
 crs.satellite = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"
 
+months2seasons = factor(c(
+  # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
+  # Baccarelli, A. A., Tellez-Rojo, M. M., … Kloog, I. (2015).
+  # Using high-resolution satellite aerosol optical depth to
+  # estimate daily PM_{2.5} geographical distribution in Mexico
+  # City. Environmental Science & Technology, 49(14), 8576–8584.
+  # doi:10.1021/acs.est.5b00859
+    "ColdDry",  # Jan
+    "ColdDry",  # Feb
+    "WarmDry",  # Mar
+    "WarmDry",  # Apr
+    "Rainy",    # May
+    "Rainy",    # Jun
+    "Rainy",    # Jul
+    "Rainy",    # Aug
+    "Rainy",    # Sep
+    "Rainy",    # Oct
+    "ColdDry",  # Nov
+    "ColdDry")) # Dec
+
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
 latest.year = 2018L

@@ -346,26 +346,6 @@ multi.run.cv = function(years)
    rbindlist(lapply(1 : nrow(args), function(i)
        run.cv(args[i, "the.year"], args[i, "dv"])))}
 
-months2seasons = factor(c(
-  # From: Just, A. C., Wright, R. O., Schwartz, J., Coull, B. A.,
-  # Baccarelli, A. A., Tellez-Rojo, M. M., … Kloog, I. (2015).
-  # Using high-resolution satellite aerosol optical depth to
-  # estimate daily PM_{2.5} geographical distribution in Mexico
-  # City. Environmental Science & Technology, 49(14), 8576–8584.
-  # doi:10.1021/acs.est.5b00859
-    "ColdDry",  # Jan
-    "ColdDry",  # Feb
-    "WarmDry",  # Mar
-    "WarmDry",  # Apr
-    "Rainy",    # May
-    "Rainy",    # Jun
-    "Rainy",    # Jul
-    "Rainy",    # Aug
-    "Rainy",    # Sep
-    "Rainy",    # Oct
-    "ColdDry",  # Nov
-    "ColdDry")) # Dec
-
 summarize.cv.results = function(multirun.output)
    {d = multirun.output[fold != -1]
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
