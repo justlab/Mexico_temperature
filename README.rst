@@ -61,7 +61,7 @@ Since R's ``readxl`` package has difficulty with the EMAs Excel files, I used Li
 License
 ============================================================
 
-We assert no copyright over the data. The code is copyright 2018, 2019 Kodi B. Arfer, Iván Gutiérrez-Avila, and Johnathan Rush.
+We assert no copyright over the data. The code is copyright 2018, 2019, 2020 Kodi B. Arfer, Iván Gutiérrez-Avila, and Johnathan Rush.
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
