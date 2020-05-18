@@ -514,9 +514,25 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         mean(temp.C.mean, na.rm = T)])
     d[, simat.ground.temp.mean := simat.daily.means[.(d$date), V1]]
 
+    # Also get some crude predictions of precipitation, via
+    # inverse-distance weighting (IDW).
+    message("Predicting precipitation")
+    precip = merge(
+        get.ground()$obs[, .(stn, date, precipitation.mm.total)],
+        get.ground()$stations[, .(stn, lon, lat)],
+        all.x = T, all.y = F,
+        by = "stn")[!is.na(precipitation.mm.total)]
+    d[, by = date, precipitation.mm := gstat::idw(
+        formula = precipitation.mm.total ~ 1,
+        locations = ~ lon + lat,
+        data = precip[date == .BY$date],
+        newdata = .SD,
+        debug.level = 0)[, "var1.pred"]]
+
     d[, mget(c(
         paste0("model.", temp.ground.vars),
-        "simat.ground.temp.mean"))]}
+        "simat.ground.temp.mean",
+        "precipitation.mm"))]}
 
 per.mrow.population = function(pop.col)
    {message("Making subgrid")
