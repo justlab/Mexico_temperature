@@ -204,6 +204,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     d = d[, .(
         mrow, yday,
         stn,
+        wunder = stations[.(d$stn), network] == "wunderground",
         ground.temp.lo, ground.temp.mean, ground.temp.hi,
         satellite.temp.day, satellite.temp.day.imputed,
         satellite.temp.night, satellite.temp.night.imputed,
@@ -242,7 +243,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     d}
 model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
 
-impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F)
+impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F, train.wunder = T)
   # For each ground-station variable (other than the DV,
   # temperature), substitute values that are missing or are
   # currently in the test fold. We use the nearest station
@@ -265,9 +266,12 @@ impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F)
         for (the.stn in ustn)
            {piece = d.orig[
                 stn == as.integer(the.stn),
-                .(yday, v = get(vname), fold)]
+                .(yday, v = get(vname), fold, wunder)]
             other.vs[[the.stn]] = rep(NA_real_, max(d$yday))
-            other.vs[[the.stn]][piece$yday] = piece$v
+            if (train.wunder || !piece$wunder[1])
+              # When we don't want to train on Wunderground stations,
+              # keep the NAs so none of their values will be used.
+                other.vs[[the.stn]][piece$yday] = piece$v
             other.folds[[the.stn]] = rep(NA_integer_, max(d$yday))
             other.folds[[the.stn]][piece$yday] = piece$fold}
 
@@ -319,7 +323,7 @@ train.model = function(dataset)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
 
-run.cv = function(the.year, dvname)
+run.cv = function(the.year, dvname, train.wunder = T)
   # Under cross-validation, predict ground temperature using
   # satellite temperature over the given year.
    {d.master = copy(model.dataset(the.year, nonmissing.ground.temp = T))
@@ -329,8 +333,10 @@ run.cv = function(the.year, dvname)
 
     bar = txtProgressBar(min = 0, max = n.folds, style = 3)
     for (fold.i in 1 : n.folds)
-       {d = impute.nontemp.ground.vars(d.master, fold.i)
-        f.pred = train.model(d[fold != fold.i])
+       {d = impute.nontemp.ground.vars(d.master, fold.i,
+            train.wunder = train.wunder)
+        f.pred = train.model(d[fold != fold.i &
+            (train.wunder | !wunder)])
         d.master[fold == fold.i, pred := f.pred(d[fold == fold.i])]
         setTxtProgressBar(bar, fold.i)}
     close(bar)
@@ -338,16 +344,17 @@ run.cv = function(the.year, dvname)
     cbind(d.master, year = the.year, dv = dvname)}
 run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
 
-multi.run.cv = function(years)
+multi.run.cv = function(years, train.wunder = T)
   # Run cross-validation for each outcome in each of the given years,
   # and combine all the results into one big data.table.
   {args = expand.grid(the.year = years, dv = temp.ground.vars,
        stringsAsFactors = F)
    rbindlist(lapply(1 : nrow(args), function(i)
-       run.cv(args[i, "the.year"], args[i, "dv"])))}
+       run.cv(args[i, "the.year"], args[i, "dv"],
+           train.wunder = train.wunder)))}
 
-summarize.cv.results = function(multirun.output)
-   {d = multirun.output[fold != -1]
+summarize.cv.results = function(multirun.output, test.wunder = T)
+   {d = multirun.output[fold != -1 & (test.wunder | !wunder)]
     d[, dv := substr(dv, nchar("ground.temp.") + 1, 1e6)]
     idist = 1 / as.matrix(dist(stations[, .(lon, lat)]))
     diag(idist) = 0
