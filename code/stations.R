@@ -677,7 +677,17 @@ get.ground.raw.wunderground = function()
    {db = dbConnect(SQLite(),
         stpath("wunderground-daily-mexico.sqlite"))
     stations = as.data.table(dbGetQuery(db, "select
-            stn, lon, lat
+            stn,
+            lon,
+            lat,
+            elevation as 'stn.elevation',
+            height,
+            surface_type as surface,
+            state,
+            city,
+            neighborhood,
+            station_type as 'station.type',
+            software
         from Stations"))
     obs = as.data.table(dbGetQuery(db, "select
             stn,
@@ -717,15 +727,19 @@ get.ground.raw = function()
     # Add network identifiers.
     for (net in names(networks))
        {stations = copy(networks[[net]]$stations)
-        stations[, network := net]
         obs = copy(networks[[net]]$obs)
+        stations[, network := net]
         for (x in list(stations, obs))
             x[, stn := paste(stn, net)]
         networks[[net]] = punl(stations, obs)}
 
     # Combine all networks.
-    stations = rbindlist(lapply(networks, function(x)
-        x$stations[, .(stn, network, lon, lat)]))
+    stations = rbindlist(fill = T, lapply(networks, function(x)
+        cbind(x$stations[, .(stn, network, lon, lat)],
+            if (x$stations$network[1] == "wunderground")
+              # Include all the other columns, too.
+                  x$stations[, .SD, .SDcols =
+                      !c("stn", "network", "lon", "lat")])))
     obs = rbindlist(fill = T, lapply(networks, function(x)
         x$obs))
 
