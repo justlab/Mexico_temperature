@@ -29,6 +29,7 @@ suppressPackageStartupMessages(
     library(nngeo)})
 
 source("common.R")
+source("earthdata.R")
 source("../Just_universal/code/punl.R")
 
 proportion.of.day.required = .75
@@ -780,7 +781,10 @@ min.obs = 100
 possible.duplicate.dist.meters = 2000
 min.common.days = 30
 max.proportion.equal = 1/10
-max.deviance.temp.Cdeg = 20
+
+deviance.quantile = .9
+deviance.dist.thresh.meters = 30e3
+deviance.elev.thresh.meters = 500
 
 # https://en.wikipedia.org/wiki/Climate_of_Mexico#Weather_records
 extreme.hi.temp.C = 53
@@ -789,7 +793,7 @@ extreme.precipitation.mm = 1634
 # https://en.wikipedia.org/wiki/Wind_speed
 extreme.wind.speed.mps = 114
 
-filter.raw = function(stations, obs, print.deviant.obs = F)
+filter.raw = function(stations, obs)
    {status = function()
        message(sprintf("Now at %s observations from %s stations",
            format(nrow(obs), big.mark = ","),
@@ -894,37 +898,51 @@ filter.raw = function(stations, obs, print.deviant.obs = F)
                 [, mean(V1)])
             stopifnot(proportion.equal < max.proportion.equal)}}
 
+    message("Getting station elevations")
+    stations[, elev := extract(get.elevation(),
+        st_as_sf(.SD, coords = c("lon", "lat"), crs = crs.lonlat))]
+    setkey(stations, stn)
+    obs[, elev := stations[.(obs$stn), elev]]
+
     message("Removing deviant stations (by temperature)")
-    # An observation is deviant if contemporaneous observations
-    # at the nearest two stations are both at least
-    # `max.deviance.temp.Cdeg` away. A station is deviant if it
-    # has any deviant observations.
     stns.deviant = character()
     local(for (temp.var in paste0("temp.C.", c("max", "min", "mean")))
        {wide = dcast(obs, date ~ stn, value.var = temp.var)
         dates = wide[, date]
         wide = as.matrix(subset(wide, select = -date))[, stations$stn]
-
-        for (stn.i in 1 : nrow(stations))
-           {neighbors.i = order(stdist[stn.i,])[c(2, 3)]
+        deviances = sapply(1 : nrow(stations), function(stn.i)
+           {# Among all pairs of stations for which each station is
+            # close to `stn.i`, find the pair that maximizes the
+            # number of days on which all three stations have an
+            # observation.
+            candidates = setdiff(
+                which(
+                    stdist[stn.i,] < deviance.dist.thresh.meters &
+                    abs(stations[stn.i, elev] - stations$elev)
+                        < deviance.elev.thresh.meters),
+                stn.i)
+            if (length(candidates) < 2)
+                return(NA_real_)
+            combos = combn(m = 2,
+                candidates,
+                function(pair) c(pair,
+                    sum(rowSums(is.na(wide[, c(stn.i, pair)])) == 0)))
+            if (max(combos[3,]) == 0)
+                return(NA_real_)
+            # For all of the days on which all three stations are
+            # observed, compute the lesser of `stn.i`'s absolute
+            # difference from its neighbors. The greatest of all these
+            # minima, across time, is `stn.i`'s deviance.
+            neighbors.i = combos[c(1, 2), which.max(combos[3,])]
             deviance = pmin(
                 abs(wide[, stn.i] - wide[, neighbors.i[1]]),
                 abs(wide[, stn.i] - wide[, neighbors.i[2]]))
-            deviance[is.na(deviance)] = 0
-            bad = deviance > max.deviance.temp.Cdeg
-
-            if (print.deviant.obs)
-                for (date.i in which(bad))
-                    message(stations[stn.i, stn], " ", temp.var, " ",
-                        dates[date.i], " ",
-                        stations[neighbors.i[1], stn], " ",
-                        stations[neighbors.i[2], stn], " ",
-                        paste(collapse = ",",
-                            round(wide[date.i, c(stn.i, neighbors.i)])))
-
-            if (any(bad))
-                stns.deviant <<- unique(c(stns.deviant,
-                    stations[stn.i, stn]))}})
+            max(deviance, na.rm = T)})
+        # A station is deviant if its deviance exceeds
+        # `deviance.quantile`.
+        stns.deviant <<- unique(c(stns.deviant,
+            stations[j = stn, deviances >
+                quantile(deviances, deviance.quantile, na.rm = T)]))})
     stations = stations[!(stn %in% stns.deviant)]
     obs = obs[!(stn %in% stns.deviant)]
     status()
