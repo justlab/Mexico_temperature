@@ -162,7 +162,7 @@ time.series.plot = function()
 
     # Get cross-validated predictions.
     d = rbindlist(lapply(years, function(y)
-        (run.cv(y, "ground.temp.mean")
+        (run.cv(y, "ground.temp.mean", train.wunder = T)
             [stn %in% unname(stns),
                 c(.SD, .(date = lubridate::make_date(y, 1, 1) - 1 + yday))]
             [month(date) == mon,
@@ -197,7 +197,7 @@ time.series.plot = function()
 pred.error.plot = function()
    {the.year = 2018L
 
-    d = run.cv(the.year, "ground.temp.mean")[!is.na(pred)]
+    d = run.cv(the.year, "ground.temp.mean", train.wunder = T)[!is.na(pred)]
     d[, season := months2seasons[month(
         lubridate::make_date(the.year, 1, 1) - 1 + yday)]]
 
