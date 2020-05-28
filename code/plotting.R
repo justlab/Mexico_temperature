@@ -212,7 +212,7 @@ pred.error.plot = function()
         geom_density(aes(pred - ground.temp), bw = .1) +
         facet_grid(season ~ .) +
         xlab("Prediction error") +
-        scale_y_continuous(limits = c(0, .4)) +
+        scale_y_continuous(limits = c(0, .45)) +
         coord_cartesian(xlim = c(-10, 5), expand = F) +
         theme_bw() +
         theme(
