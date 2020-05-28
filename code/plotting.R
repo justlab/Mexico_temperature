@@ -156,9 +156,16 @@ pop.map = function(pop.col, thresholds.tempC = NULL)
     p}
 
 time.series.plot = function()
-   {stns = c("Mexico City" = 8, Morelos = 24)
+   {stns = c(
+        "Mexico City" = "BIOLÓGICAS,",
+        Morelos = "TEPOZTLAN emas")
     years = c(2010L, 2018L)
     mon = 6
+
+    stns = sapply(stns, function(s)
+        stations[str_detect(name, s), stn])
+    print(stns)
+    stopifnot(is.integer(stns) && length(stns) == 2)
 
     # Get cross-validated predictions.
     d = rbindlist(lapply(years, function(y)
