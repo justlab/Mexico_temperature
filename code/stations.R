@@ -31,6 +31,7 @@ suppressPackageStartupMessages(
 source("common.R")
 source("earthdata.R")
 source("../Just_universal/code/punl.R")
+source("../Just_universal/code/repeated_idw.R")
 
 proportion.of.day.required = .75
 
@@ -782,9 +783,9 @@ possible.duplicate.dist.meters = 2000
 min.common.days = 30
 max.proportion.equal = 1/10
 
-deviance.quantile = .9
-deviance.dist.thresh.meters = 30e3
-deviance.elev.thresh.meters = 500
+deviance.quantile = .95
+idw.maxdist.meters = 30e3
+idw.elev.thresh.meters = 500
 
 # https://en.wikipedia.org/wiki/Climate_of_Mexico#Weather_records
 extreme.hi.temp.C = 53
@@ -905,44 +906,37 @@ filter.raw = function(stations, obs)
     obs[, elev := stations[.(obs$stn), elev]]
 
     message("Removing deviant stations (by temperature)")
+    # Compute the squared differences between observed temperatures
+    # and IDW interpolations from other stations. Throw away the
+    # stations with the greatest such differences.
     stns.deviant = character()
-    local(for (temp.var in paste0("temp.C.", c("max", "min", "mean")))
-       {wide = dcast(obs, date ~ stn, value.var = temp.var)
-        dates = wide[, date]
-        wide = as.matrix(subset(wide, select = -date))[, stations$stn]
-        deviances = sapply(1 : nrow(stations), function(stn.i)
-           {# Among all pairs of stations for which each station is
-            # close to `stn.i`, find the pair that maximizes the
-            # number of days on which all three stations have an
-            # observation.
-            candidates = setdiff(
-                which(
-                    stdist[stn.i,] < deviance.dist.thresh.meters &
-                    abs(stations[stn.i, elev] - stations$elev)
-                        < deviance.elev.thresh.meters),
-                stn.i)
-            if (length(candidates) < 2)
-                return(NA_real_)
-            combos = combn(m = 2,
-                candidates,
-                function(pair) c(pair,
-                    sum(rowSums(is.na(wide[, c(stn.i, pair)])) == 0)))
-            if (max(combos[3,]) == 0)
-                return(NA_real_)
-            # For all of the days on which all three stations are
-            # observed, compute the lesser of `stn.i`'s absolute
-            # difference from its neighbors. The greatest of all these
-            # minima, across time, is `stn.i`'s deviance.
-            neighbors.i = combos[c(1, 2), which.max(combos[3,])]
-            deviance = pmin(
-                abs(wide[, stn.i] - wide[, neighbors.i[1]]),
-                abs(wide[, stn.i] - wide[, neighbors.i[2]]))
-            max(deviance, na.rm = T)})
-        # A station is deviant if its deviance exceeds
-        # `deviance.quantile`.
-        stns.deviant <<- unique(c(stns.deviant,
-            stations[j = stn, deviances >
-                quantile(deviances, deviance.quantile, na.rm = T)]))})
+    local(
+       {idw.tables = repeated.idw.tables(
+            locations = st_coordinates(st_transform(crs = crs.mexico.city,
+                st_as_sf(crs = crs.lonlat,
+                    stations, coords = c("lon", "lat")))),
+            maxdist = idw.maxdist.meters,
+            source.subsetter = function(i)
+                # Don't interpolate a station with itself.
+                (1 : nrow(stations)) != i &
+                # Only use stations within an elevation threshold.
+                abs(stations[i, elev] - stations$elev)
+                    < idw.elev.thresh.meters)
+        for (temp.var in paste0("temp.C.", c("max", "min", "mean")))
+           {obs[, idw := repeated.idw(
+                tables = idw.tables,
+                li = match(stn, stations$stn),
+                group = date,
+                outcome = get(temp.var),
+                progress = T)]
+            diffs = obs[!is.na(get(temp.var)) & !is.na(idw), by = stn,
+               {sqd = (get(temp.var) - idw)^2
+                .(sqd.mean = mean(sqd), sqd.max = max(sqd))}]
+            stns.deviant <<- unique(c(stns.deviant,
+                diffs[j = stn,
+                    sqd.mean > quantile(sqd.mean, deviance.quantile) |
+                    sqd.max > quantile(sqd.max, deviance.quantile)]))}})
+    obs[, idw := NULL]
     stations = stations[!(stn %in% stns.deviant)]
     obs = obs[!(stn %in% stns.deviant)]
     status()
