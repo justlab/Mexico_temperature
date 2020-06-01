@@ -30,8 +30,6 @@ suppressPackageStartupMessages(
 
 source("common.R")
 source("earthdata.R")
-source("../Just_universal/code/punl.R")
-source("../Just_universal/code/repeated_idw.R")
 
 proportion.of.day.required = .75
 

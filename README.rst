@@ -46,8 +46,7 @@ Running the code
 To reproduce our results, you have the option of starting from scratch, that is, generating ``ground.json.gz`` from the raw station data, or of using the cleaned observations in ``ground.json.gz`` and modeling temperature from there. Either way, you'll need to:
 
 1. Install any libraries required by ``library(...)`` calls in the file you're using.
-2. Copy the non-package depedency ``Just_universal`` (available at https://github.com/justlab/Just_universal ) into the ``Mexico_temperature`` repository (so the ``Just_universal`` directory should sit beside ``Mexico_temperature``'s ``code`` directory).
-3. Set the environment variable ``JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT`` to the directory containing the data from Zenodo.
+2. Set the environment variable ``JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT`` to the directory containing the data from Zenodo.
 
 To generate ``ground.json.gz``, source ``stations.R``. You'll need to download and uncompress the ``geography`` and ``stations`` data from Zenodo. You can then call ``save.ground()``.
 

@@ -1,8 +1,7 @@
 suppressPackageStartupMessages(
    {library(sf)
-    library(jsonlite)})
-
-source("../Just_universal/code/pairmemo.R")
+    library(jsonlite)
+    library(Just.universal)})
 
 data.root = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT")
 pairmemo.dir = file.path(data.root, "pairmemo")
