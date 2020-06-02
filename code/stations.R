@@ -676,6 +676,7 @@ es.stations = function(obs, emas = F)
 get.ground.raw.wunderground = function()
    {db = dbConnect(SQLite(),
         stpath("wunderground-daily-mexico.sqlite"))
+    on.exit(dbDisconnect(db))
     stations = as.data.table(dbGetQuery(db, "select
             stn,
             lon,
@@ -699,7 +700,6 @@ get.ground.raw.wunderground = function()
             wind_speed as `wind.speed.miles.per.hour.mean`,
             pressure as `pressure.inHg.mean`
         from Daily"))
-    dbDisconnect(db)
     obs[, date := as.Date(as.character(date), format = "%Y%m%d")]
     stopifnot(!anyNA(obs$date))
     punl(stations, obs)}
