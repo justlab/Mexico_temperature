@@ -230,25 +230,21 @@ get.ground.raw.unam = function()
                 "\\s+", "")
             if (stn.name == "CCH0")
                 stn.name = "CCHO"
-            if (stn.name == "ENP4")
-              # This station sometimes has more than one observation for the
-              # same time with different values (e.g., compare
+            if (stn.name %in% c("ENP4", "ENP9"))
+              # These stations sometimes have more than one
+              # observation for the same time with different values
+              # (e.g., compare
               # "2007/10/31 08:00:00" in
               #     2007_ENP4.zip/2007-ENP4-L1/2007-10-ENP4-L1.CSV
               # to the same row in
               #     2007_CCA.zip/2007-CCA-L1/2007-10-CCA-L1.CSV
-              # .) Let's ignore it.
+              # .) Let's ignore them.
                 return(data.table())
             latlon = str_match(text, mlr("^Lat ([0-9.]+) N, Lon ([0-9.]+) W"))
-            station = data.table(
-                stn.name = stn.name,
+            stations <<- rbind(stations, data.table(
+                stn = stn.name,
                 lon = -as.numeric(latlon[,3]),
-                lat = as.numeric(latlon[,2]))
-            stations <<- unique(rbind(stations, station))
-            stn = stations[, which(
-                stn.name == station$stn.name &
-                lon == station$lon &
-                lat == station$lat)]
+                lat = as.numeric(latlon[,2])))
 
             d = fread(
                 str_sub(text, str_locate(text, mlr("^[0-9]{4}/"))[,1]),
@@ -260,7 +256,7 @@ get.ground.raw.unam = function()
             d = d[!is.na(date)]
 
             d = d[, by = date, .(
-                stn = stn,
+                stn = stn.name,
                 temp.C.mean = if.enough.halfhourly(mean, Temp),
                 temp.C.max = if.enough.halfhourly(max, Temp),
                 temp.C.min = if.enough.halfhourly(min, Temp),
@@ -271,7 +267,20 @@ get.ground.raw.unam = function()
             vnames = setdiff(colnames(d), c("date", "stn"))
             d[rowSums(!is.na(d[, mget(vnames)])) > 0]})}))))
 
-    stations[, stn := .I]
+    # When a single station name is associated with more than one
+    # lon-lat pair, use the most common one.
+    stations = (stations
+        [, by = .(stn, lon, lat), .N]
+        [, keyby = stn, .SD[which.max(.N)]])
+    # Correct the coordinates for CCHS (CCH-SUR) by hand. These
+    # numbers are from
+    # https://www.ruoa.unam.mx/pembu/index.php?page=cchs
+    # , but what appear to be decimal degrees there are actually
+    # minutes and seconds.
+    stations[.("CCHS"), c("lon", "lat") := .(
+        -(99 + 11/60 + 56/(60*60)),
+        19 + 18/60 + 44/(60*60))]
+
     punl(stations, obs)}
 get.ground.raw.unam = pairmemo(get.ground.raw.unam, pairmemo.dir)
 
