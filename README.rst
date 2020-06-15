@@ -1,6 +1,6 @@
 In this project, "A spatiotemporal reconstruction of daily ambient temperature using satellite data in the Megalopolis of Central Mexico from 2003–2018", we built a model to predict the mean, maximum, and minimum temperature on each day at each square in a 1-km grid for an area around Mexico City.
 
-Raw and processed data, including predictions, as well as a research notebook, can be found on Zenodo at http://doi.org/10.5281/zenodo.3362524
+Raw and processed data, including predictions, as well as a research notebook, can be found on Zenodo at http://doi.org/10.5281/zenodo.3362523
 
 The bulk of the data-processing and data-analysis code can be found on GitHub at https://github.com/justlab/Mexico_temperature . Other code is embedded inline in the manuscript and notebook.
 
