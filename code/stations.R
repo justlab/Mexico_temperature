@@ -86,18 +86,18 @@ daily.summary = function(d, freq, variable.name)
     vals.required = max.vals.per.day * proportion.of.day.required
     stopifnot(vals.required == round(vals.required))
 
-    d = d[, by = .(date, stn),
+    d = d[, by = .(date, stn), eval(bquote(
       {stopifnot(.N <= max.vals.per.day)
-       if (.N >= vals.required)
-          {if (variable.name == "temp.C")
-               .(
+       if (.N >= vals.required) .(
+           if (variable.name == "temp.C")
+               quote(list(
                     temp.C.mean = mean(value),
                     temp.C.max = max(value),
-                    temp.C.min = min(value))
+                    temp.C.min = min(value)))
            else if (variable.name == "precipitation.mm")
-                .(precipitation.mm.total = sum(value))
+                quote(list(precipitation.mm.total = sum(value)))
            else
-                .(value.mean = mean(value))}}]
+                quote(list(value.mean = mean(value))))}))]
     if ("value.mean" %in% names(d))
         setnames(d, "value.mean", paste0(variable.name, ".mean"))
     d}
