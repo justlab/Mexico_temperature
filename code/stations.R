@@ -121,7 +121,7 @@ is.subset = function(needles, haystack)
 
 ## ** SIMAT
 
-get.ground.raw.simat = function()
+pm(get.ground.raw.simat <- function()
   # According to an email exchange Iván Gutiérrez-Avila had with
   # somebody at SIMAT, all times are in UTC-06:00.
   # Info:
@@ -174,12 +174,11 @@ get.ground.raw.simat = function()
     stopifnot(!anyNA(stations))
     setkey(stations, stn)
 
-    punl(stations, obs)}
-get.ground.raw.simat = pairmemo(get.ground.raw.simat, pairmemo.dir)
+    punl(stations, obs)})
 
 ## ** UNAM
 
-get.ground.raw.unam = function()
+pm(get.ground.raw.unam <- function()
    {url.root = "http://www.ruoa.unam.mx/pembu/Estaciones"
 
     query = as.data.table(expand.grid(
@@ -281,14 +280,13 @@ get.ground.raw.unam = function()
         -(99 + 11/60 + 56/(60*60)),
         19 + 18/60 + 44/(60*60))]
 
-    punl(stations, obs)}
-get.ground.raw.unam = pairmemo(get.ground.raw.unam, pairmemo.dir)
+    punl(stations, obs)})
 
 ## ** SMN
 
 ## *** Observatories
 
-get.ground.raw.smn.observatories = function()
+pm(get.ground.raw.smn.observatories <- function()
   # We use the hourly file. This network also provides daily and
   # 15-minute files. However, judging from the ELEMENT-CODE
   # column of these files, they may not have the same variables
@@ -350,19 +348,16 @@ get.ground.raw.smn.observatories = function()
         lon = -(LONG + LONM/60 + ifelse(is.na(LONS), 0, LONS/(60*60))),
         lat = LATG + LATM/60 + ifelse(is.na(LATS), 0, LATS/(60*60)))]
     
-    punl(stations, obs)}
-get.ground.raw.smn.observatories = pairmemo(get.ground.raw.smn.observatories, pairmemo.dir)
+    punl(stations, obs)})
 
 ## *** ESIMEs and EMAs
 
-get.ground.raw.smn.esimes = function()
-    es.stations(process.es.observations(read.es()))
-get.ground.raw.smn.esimes = pairmemo(get.ground.raw.smn.esimes, pairmemo.dir)
+pm(get.ground.raw.smn.esimes <- function()
+    es.stations(process.es.observations(read.es())))
 
-get.ground.raw.smn.emas = function()
+pm(get.ground.raw.smn.emas <- function()
     es.stations(emas = T,
-        process.es.observations(emas = T, n.jobs = 8, read.es(emas = T)))
-get.ground.raw.smn.emas = pairmemo(get.ground.raw.smn.emas, pairmemo.dir)
+        process.es.observations(emas = T, n.jobs = 8, read.es(emas = T))))
 
 read.es = function(emas = F)
    {message("Loading SMN ", (if (emas) "EMAs" else "ESIMEs"))

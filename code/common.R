@@ -4,8 +4,8 @@ suppressPackageStartupMessages(
     library(Just.universal)})
 
 data.root = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_DATA_ROOT")
-pairmemo.dir = file.path(data.root, "pairmemo")
-dir.create(pairmemo.dir, showWarnings = F)
+stopifnot(file.exists(data.root))
+
 ground.json.path = file.path(data.root, "ground.json.gz")
 
 crs.lonlat = 4326 # https://epsg.io/4326
@@ -39,24 +39,31 @@ latest.year = 2018L
 
 study.area.buffer.meters = 50e3
 
-pred.area = function()
-    st_read(quiet = T, file.path(data.root, "geography", "mxcity_megalopolis"))
-      # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
-pred.area = pairmemo(pred.area, pairmemo.dir, mem = T)
+pm = function(...) pairmemo(
+    directory = function()
+       {dir.create(file.path(data.root, "pairmemo"), showWarnings = F)
+        file.path(data.root, "pairmemo")},
+    n.frame = 2,
+    ...)
 
-study.area = function()
+pm(mem = T,
+pred.area <- function()
+    st_read(quiet = T, file.path(data.root, "geography", "mxcity_megalopolis")))
+      # From https://www.arcgis.com/home/item.html?id=c72bd82a8d6d428bb6914590d6326f7e
+
+pm(mem = T,
+study.area <- function()
    {b = st_bbox(st_transform(crs = crs.lonlat,
         st_buffer(pred.area(), study.area.buffer.meters)))
     f = function(z) round(unname(z), 1)
     list(left = f(b$xmin), right = f(b$xmax),
-        bottom = f(b$ymin), top = f(b$ymax))}
-study.area = pairmemo(study.area, pairmemo.dir, mem = T)
+        bottom = f(b$ymin), top = f(b$ymax))})
 
 in.study.area = function(lon, lat)
     lon >= study.area()$left & lon <= study.area()$right &
     lat >= study.area()$bottom & lat <= study.area()$top
 
-get.ground = function()
+pm(mem = T,
+get.ground <- function()
     sapply(simplify = F, fromJSON(gzfile(ground.json.path)),
-        as.data.table)
-get.ground = pairmemo(get.ground, pairmemo.dir, mem = T)
+        as.data.table))

@@ -28,7 +28,8 @@ full.satellite.grid = function()
         grep(value = T, "\\.A\\d{4}001\\.[^/]+$",
             satellite.paths("aqua", "vegetation", full.grid.year))))
 
-get.satellite.data = function(satellite, product, the.year)
+pm(fst = T,
+get.satellite.data <- function(satellite, product, the.year)
   # N.B. This function implicitly uses `master.grid`, from `modeling.R`.
   # It's not passed in as an argument so it's not serialized by
   # `pairmemo`.
@@ -62,8 +63,7 @@ get.satellite.data = function(satellite, product, the.year)
                    sprintf('%03d', daynum - c(0, 1)))]}))
 
     message("Writing satellite data")
-    d}
-get.satellite.data = pairmemo(get.satellite.data, pairmemo.dir, fst = T)
+    d})
 
 satellite.paths = function(satellite, product, the.year)
    {paths = function() str_subset(
@@ -155,7 +155,7 @@ read.satellite.file = function(fpath, product, full.grid = F)
             stopifnot(!anyNA(d))}}
     d}
 
-get.elevation = function()
+pm(get.elevation <- function()
    {message("Joining elevation files")
     elev = do.call(mosaic, c(
         list(fun = mean, na.rm = T),
@@ -170,8 +170,7 @@ get.elevation = function()
     message("Reading all")
     elev = readAll(elev)
     message("Saving")
-    elev}
-get.elevation = pairmemo(get.elevation, pairmemo.dir)
+    elev})
 
 elevation.paths = function()
   # Gets the paths to elevation files, downloading them if necessary.

@@ -7,7 +7,8 @@ source("common.R")
 mexico.city.agebs.path = "~/Jdrive/PM/Just_Lab/projects/airmex/data/gis/gisdata/AGEBS_CDMX_2010.shp"
 population.path.fmt = "~/Jdrive/PM/Just_Lab/projects/airmex/data/population/%s_cuadratic_csv"
 
-deleg.weighted.preds = function()
+pm(fst = T,
+deleg.weighted.preds <- function()
   # Predict temperature per day and delegación (subregion of
   # Mexico City), weighted by the population of each delegación.
   # Predictions are made with weights from people of all ages and
@@ -55,5 +56,4 @@ deleg.weighted.preds = function()
     message("Summarizing by delegación")
     d[, by = .(only.65plus, date, delegacion = factor(substr(ageb, 1, 5))),
         .SDcols = paste0("pred.", temp.ground.vars),
-        lapply(.SD, function(temp) sum(temp * pop)/sum(pop))]}
-deleg.weighted.preds = pairmemo(deleg.weighted.preds, pairmemo.dir, fst = T)
+        lapply(.SD, function(temp) sum(temp * pop)/sum(pop))]})

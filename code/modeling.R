@@ -31,7 +31,8 @@ nontemp.ground.vars = c(
 
 available.years = year(earliest.date) : latest.year
 
-get.nonsatellite.data = function()
+pm(mem = T,
+get.nonsatellite.data <- function()
    {message("Loading master grid")
     master.grid <<- full.satellite.grid()[in.study.area(lon, lat)]
     stopifnot(nrow(unique(master.grid[, .(lon, lat)])) == nrow(master.grid))
@@ -94,8 +95,7 @@ get.nonsatellite.data = function()
         sort(stations$stn)[v])
 
     message("Master grid and ground data loaded")
-    list(master.grid, ground, stations, stns.by.dist)}
-get.nonsatellite.data = pairmemo(get.nonsatellite.data, pairmemo.dir, mem = T)
+    list(master.grid, ground, stations, stns.by.dist)})
 
 set.mrows = function(d, longitude.col, latitude.col)
   # Adds to the given data table a column `mrow` that specifies
@@ -108,7 +108,8 @@ set.mrows = function(d, longitude.col, latitude.col)
 
 mrow.sets = list()
 
-model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
+pm(mem = T, fst = T,
+model.dataset <- function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
    {if (!xor(!is.null(mrow.set), nonmissing.ground.temp))
         stop("Either enable `nonmissing.ground.temp` to get all points with non-missing ground temperatures, or choose an `mrow.set` to get all days for the selected `mrow`s.")
 
@@ -240,8 +241,7 @@ model.dataset = function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     setkey(d, stn, yday)
 
     message("Writing")
-    d}
-model.dataset = pairmemo(model.dataset, pairmemo.dir, mem = T, fst = T)
+    d})
 
 impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F, train.wunder = T)
   # For each ground-station variable (other than the DV,
@@ -323,7 +323,8 @@ train.model = function(dataset)
        predict(m, newdata = predict(preproc, newdata),
            allow.new.levels = T)}
 
-run.cv = function(the.year, dvname, train.wunder = T)
+pm(mem = T, fst = T,
+run.cv <- function(the.year, dvname, train.wunder = T)
   # Under cross-validation, predict ground temperature using
   # satellite temperature over the given year.
    {d.master = copy(model.dataset(the.year, nonmissing.ground.temp = T))
@@ -341,8 +342,7 @@ run.cv = function(the.year, dvname, train.wunder = T)
         setTxtProgressBar(bar, fold.i)}
     close(bar)
 
-    cbind(d.master, year = the.year, dv = dvname)}
-run.cv = pairmemo(run.cv, pairmemo.dir, mem = T, fst = T)
+    cbind(d.master, year = the.year, dv = dvname)})
 
 multi.run.cv = function(years, train.wunder = T)
   # Run cross-validation for each outcome in each of the given years,
@@ -541,7 +541,8 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         "simat.ground.temp.mean",
         "precipitation.mm"))]}
 
-per.mrow.population = function(pop.col)
+pm(mem = T, fst = T,
+per.mrow.population <- function(pop.col)
    {message("Making subgrid")
     subgrid = master.grid[(in.pred.area)]
     subgrid.ps = st_sf(subgrid[, .(mrow)],
@@ -576,8 +577,7 @@ per.mrow.population = function(pop.col)
     isect = rbind(isect,
         data.table(mrow = setdiff(subgrid$mrow, isect$mrow), pop = 0))
     setkey(isect, mrow)
-    isect}
-per.mrow.population = pairmemo(per.mrow.population, pairmemo.dir, mem = T, fst = T)
+    isect})
 
 square.xyd = function(x, y, d)
   # Create a polygon object representing a square from the x- and
