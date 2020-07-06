@@ -45,7 +45,7 @@ spanish.month.abbrs = c("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", 
 
 stpath = function(...) file.path(data.root, "stations", ...)
 
-download = function(url, to, f, ...)
+download = function(url, to, f, ..., user = NULL, password = NULL)
   # Downloads a file from `url` and saves it to `to` if there isn't
   # already a file there, then calls `f(to, ...)`.
    {to = stpath("downloads", to)
@@ -54,7 +54,9 @@ download = function(url, to, f, ...)
         stopifnot(0 == system2("wget", c(
             url, "-O", to,
             "--no-check-certificate",
-            "--user-agent", "some-program")))
+            "--user-agent", "some-program",
+            (if (!is.null(user)) c("--user", user)),
+            (if (!is.null(password)) c("--password", password)))))
     f(to, ...)}
 
 slurp.zip = function(path)
@@ -349,6 +351,22 @@ pm(get.ground.raw.smn.observatories <- function()
         lat = LATG + LATM/60 + ifelse(is.na(LATS), 0, LATS/(60*60)))]
     
     punl(stations, obs)})
+
+get.ground.raw.smn.observatories.new <- function()
+  # Incomplete code to collect newer versions of the SMN observatories
+  # files from an FTP site.
+   {dl = function(fname, f, ...)
+        download(
+            paste0("ftp://200.4.8.36:/BD-Climatologica/Observatorios/",
+               fname),
+            file.path("smn-observatories", fname),
+            user = "ftpsmn.conagua",
+            password = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_SMN_FTP_PASSWORD"),
+            f = f, ...)
+
+    dl("ELEMENTOS_HORARIOS_OBSERVATORIOS.txt", message)
+    dl("Claves_Observatorios.xlsx", message)
+    dl("OBS_HLY.zip", message)}
 
 ## *** ESIMEs and EMAs
 
