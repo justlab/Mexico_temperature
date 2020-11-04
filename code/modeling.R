@@ -243,10 +243,11 @@ model.dataset <- function(the.year, mrow.set = NULL, nonmissing.ground.temp = F)
     message("Writing")
     d})
 
-impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F, train.wunder = T)
+impute.nontemp.ground.vars = function(
+        d.orig, folds.holdout, progress = F, train.wunder = T)
   # For each ground-station variable (other than the DV,
   # temperature), substitute values that are missing or are
-  # currently in the test fold. We use the nearest station
+  # currently in the given folds. We use the nearest station
   # that has an eligible value on the same day (or a
   # previous day, if we can't find one on the same day).
    {d = copy(d.orig)
@@ -280,13 +281,13 @@ impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F, train.wunder
         if (progress)
             bar = txtProgressBar(min = 0, max = length(column), style = 3)
         for (ri in seq_along(column))
-           {if ((!is.null(fold.i) && folds[ri] == fold.i) ||
+           {if ((!is.null(folds.holdout) && folds[ri] %in% folds.holdout) ||
                     is.na(column[ri]))
                {found = F
                 for (the.yday in ydays[ri] : 1)
                    {for (the.stn in as.character(stns.by.dist[mrows[ri],]))
                        {if (exists(the.stn, other.vs)
-                                && (is.null(fold.i) || other.folds[[the.stn]][the.yday] != fold.i)
+                                && (is.null(folds.holdout) || !(other.folds[[the.stn]][the.yday] %in% folds.holdout))
                                 && !is.na(other.vs[[the.stn]][the.yday]))
                            {column[ri] = other.vs[[the.stn]][the.yday]
                             found = T
@@ -294,7 +295,7 @@ impute.nontemp.ground.vars = function(d.orig, fold.i, progress = F, train.wunder
                     if (found)
                         break}
                 if (!found)
-                    stop("No match found for ", fold.i, " ", ri, " ", vname)}
+                    stop("No match found for ", folds.holdout, " ", ri, " ", vname)}
             if (progress) setTxtProgressBar(bar, ri)}
         if (progress) close(bar)
 
@@ -352,6 +353,9 @@ multi.run.cv = function(years, train.wunder = T)
     rbindlist(lapply(1 : nrow(args), function(i)
         run.cv(args[i, "the.year"], args[i, "dv"],
             train.wunder = train.wunder)))}
+
+rmse = function(y, pred)
+    sqrt(mean((y - pred)^2))
 
 summarize.cv.results = function(multirun.output, test.wunder = T)
    {d = multirun.output[fold != -1 & (test.wunder | !wunder)]
@@ -434,6 +438,57 @@ summarize.cv.results = function(multirun.output, test.wunder = T)
                 [year == 2018, eval(j1), keyby = .(dv, network)]
                 [, .(dv, network,
                     N, stn, sd, rmse, "sd - rmse" = sd - rmse)])}
+
+pm(mem = T, fst = T,
+learning.curve <- function(the.year = 2018L, dvname)
+  # Set aside some of the data for testing, and look at the RMSE
+  # achieved when training on various subsamples of the remainder.
+   {# To decide which folds we hold out, choose the folds that have
+    # the RMSE closest to the overall RMSE.
+    n.folds.for.holdout = 2L
+    cv.result = run.cv(the.year, dvname)[fold != -1]
+    rmse.overall = cv.result[, rmse(ground.temp, pred)]
+    foldsets = combn(unique(cv.result$fold), n.folds.for.holdout, simplify = F)
+    folds.holdout = foldsets[[which.min(abs(rmse.overall -
+        sapply(foldsets, function(folds) 
+            cv.result[fold %in% folds, rmse(ground.temp, pred)])))]]
+
+    # Prepare the data.
+    d.master = copy(model.dataset(the.year, nonmissing.ground.temp = T))
+    setnames(d.master, dvname, "ground.temp")
+    d.master[, setdiff(temp.ground.vars, dvname) := NULL]
+    d.master[, holdout := fold %in% folds.holdout]
+
+    message("Running simulations")
+    stn.counts = c(10 * (1:8),
+        d.master[(!holdout), length(unique(stn))])
+    obs.counts = 2500 * (1:9)
+    n.reps = 100L
+    set.seed(15L)
+    bar = txtProgressBar(min = 0, max = length(obs.counts) * n.reps, style = 3)
+
+    result = rbindlist(lapply(seq_along(obs.counts), function(round.i) cbind(round.i,
+        rbindlist(lapply(seq_len(n.reps), function(rep.i) cbind(rep.i,
+           {repeat
+               {stns = d.master[(!holdout),
+                    sample(unique(stn), stn.counts[round.i])]
+                if (nrow(d.master[stn %in% stns]) >= obs.counts[round.i])
+                    break}
+            d = rbind(
+                d.master[(holdout)],
+                d.master[stn %in% stns][
+                    sample.int(.N, obs.counts[round.i])])
+            d = impute.nontemp.ground.vars(d, folds.holdout,
+                train.wunder = T)
+            f.pred = train.model(d[(!holdout)])
+            setTxtProgressBar(bar, n.reps * (round.i - 1) + rep.i)
+            data.table(rmse = d[(holdout), sqrt(mean(
+                (ground.temp - f.pred(.SD))^2))])}))))))
+     close(bar)
+
+     result[, n.obs := obs.counts[round.i]]
+     result[, n.stns := stn.counts[round.i]]
+     result})
 
 if (!exists("predict.temps.cache")) predict.temps.cache = list()
 
