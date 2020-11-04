@@ -347,11 +347,11 @@ run.cv <- function(the.year, dvname, train.wunder = T)
 multi.run.cv = function(years, train.wunder = T)
   # Run cross-validation for each outcome in each of the given years,
   # and combine all the results into one big data.table.
-  {args = expand.grid(the.year = years, dv = temp.ground.vars,
-       stringsAsFactors = F)
-   rbindlist(lapply(1 : nrow(args), function(i)
-       run.cv(args[i, "the.year"], args[i, "dv"],
-           train.wunder = train.wunder)))}
+   {args = expand.grid(the.year = years, dv = temp.ground.vars,
+        stringsAsFactors = F)
+    rbindlist(lapply(1 : nrow(args), function(i)
+        run.cv(args[i, "the.year"], args[i, "dv"],
+            train.wunder = train.wunder)))}
 
 summarize.cv.results = function(multirun.output, test.wunder = T)
    {d = multirun.output[fold != -1 & (test.wunder | !wunder)]
