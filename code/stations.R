@@ -209,16 +209,21 @@ pm(get.ground.raw.unam <- function()
                     return(NULL)
                 fnames = unzip(path, list = T)$Name
                 if (length(fnames) > 3 && length(fnames) <= 14)
-                    unname(slurp.zip(path))
+                    slurp.zip(path)
                 else
                   # XTRA
                     NULL})
         if (is.null(files))
             return(list(data.table()))
 
+        # Remove any Fortran programs that were accidentally included
+        # in the archive.
+        for (fname in str_subset(names(files), "\\.for\\z"))
+            files[[fname]] = NULL
+
         # Sometimes, files seem to consist of multiple CSV
         # files squished together, so break them apart.
-        files = unlist(lapply(files, function(text)
+        files = unlist(lapply(unname(files), function(text)
             str_split(text, "\nPrograma de Estaciones")[[1]]))
 
         lapply(files, function(text)
