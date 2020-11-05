@@ -31,7 +31,7 @@ suppressPackageStartupMessages(
 source("common.R")
 source("earthdata.R")
 
-proportion.of.day.required = .75
+proportion.of.day.required = .80
 
 # In the output, all dates signify UTC-06:00 (except for Wunderground).
 target.tz = "Etc/GMT+6"
@@ -85,8 +85,7 @@ daily.summary = function(d, freq, variable.name)
        (if (freq == "hour") 24 else
         if (freq == "half hour") 24*2 else
         if (freq == "10 min") (24*60)/10 else stop())
-    vals.required = max.vals.per.day * proportion.of.day.required
-    stopifnot(vals.required == round(vals.required))
+    vals.required = ceiling(max.vals.per.day * proportion.of.day.required)
 
     d = d[, by = .(date, stn), eval(bquote(
       {stopifnot(.N <= max.vals.per.day)
