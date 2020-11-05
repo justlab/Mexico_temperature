@@ -34,7 +34,7 @@ months2seasons = factor(c(
 
 earliest.date = "2003-01-01"
   # The earliest date we're interested in.
-latest.year = 2018L
+latest.year = 2019L
   # The last year we're interested in.
 
 study.area.buffer.meters = 50e3
