@@ -131,7 +131,7 @@ pm(get.ground.raw.simat <- function()
   # There's precipitation data available, but only with weekly samples:
   #   http://148.243.232.112:8080/opendata/redda/concentracion.csv - code "PP"
    {years = year(earliest.date) : latest.year
-    url.root = "http://148.243.232.112:8080/opendata"
+    url.root = "http://www.aire.cdmx.gob.mx/opendata"
 
     message("Loading SIMAT")
     obs = rbindlist(fill = T, pblapply(years, function(dyear)
