@@ -698,6 +698,9 @@ es.stations = function(obs, emas = F)
 
 # Slippage: Wunderground's dates are in America/Mexico_City,
 # not `target.tz`.
+#
+# Further slippage: what I interpret as the mean pressure may not
+# actually be the mean.
 
 get.ground.raw.wunderground = function()
    {db = dbConnect(SQLite(),
@@ -716,16 +719,25 @@ get.ground.raw.wunderground = function()
             station_type as 'station.type',
             software
         from Stations"))
-    obs = as.data.table(dbGetQuery(db, "select
-            stn,
+    obs = as.data.table(rbind(
+        dbGetQuery(db, sprintf("select %s from Daily_Old_API",
+           "stn,
             date,
             max_temperature as 'temp.F.max',
             min_temperature as 'temp.F.min',
             temperature as 'temp.F.mean',
             precip_today as `precipitation.inch.total`,
             wind_speed as `wind.speed.miles.per.hour.mean`,
-            pressure as `pressure.inHg.mean`
-        from Daily"))
+            pressure as `pressure.inHg.mean`")),
+        dbGetQuery(db, sprintf("select %s from Daily",
+           "stn,
+            date,
+            imperial_tempHigh as 'temp.F.max',
+            imperial_tempLow as 'temp.F.min',
+            imperial_tempAvg as 'temp.F.mean',
+            imperial_precipTotal as `precipitation.inch.total`,
+            imperial_windspeedAvg as `wind.speed.miles.per.hour.mean`,
+            imperial_pressureTrend as `pressure.inHg.mean`"))))
     obs[, date := as.Date(as.character(date), format = "%Y%m%d")]
     stopifnot(!anyNA(obs$date))
     punl(stations, obs)}
