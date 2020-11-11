@@ -384,15 +384,14 @@ pm(get.ground.raw.smn.emas <- function()
 read.es = function(emas = F)
    {message("Loading SMN ", (if (emas) "EMAs" else "ESIMEs"))
 
-    fnames = list.files(
-       (if (emas)
-           stpath("smn-emas-csv") else
-           stpath("smn-raw", "ESIMEs_2018")),
-       full.names = T)
-
-    if (!emas)
-       {fnames = grep(".xls", fnames, val = T)
-          # XTRA: CSV ESIMEs files
+    lf = function(...) list.files(full.names = T, ...)
+    if (emas)
+        fnames = lf(stpath("smn-emas-csv"))
+    else
+       {fnames = lf(stpath("smn-raw", "ESIMEs_2018"))
+        fnames = grep(".xls", fnames, val = T)
+          # XTRA: CSV ESIMEs files from before 2019
+        fnames = c(fnames, lf(stpath("smn-raw", "ESIMEs_2019")))
         fnames = grep("ESIME Guanajuato 2009", invert = T, fnames, val = T)
           # XTRA: this file leads to an error due to a row that's
           # empty except for the first cell, which is "faltantes"
@@ -400,20 +399,26 @@ read.es = function(emas = F)
           # XTRA: the last row is empty except for the first
           # cell, which is "Faltantes de oct, nov y dic"
 
-    ds = pblapply(fnames, function(fname)
-       {if (endsWith(fname, ".csv"))
-           {d = fread(fname, na.strings = "")
+    pbsapply(simplify = F, fnames, function(fname)
+       {if (endsWith(tolower(fname), ".csv"))
+           {d = fread(fname, na.strings = "", showProgress = F)
             if (nrow(d) && is.na(d[1, 1]))
               # We mistook a row of units for a row of values.
               # Reread the file, adding the units to the column names.
-               {units = sapply(d[1,], as.character)
+               {if (nrow(d) == 1)
+                  # Actually, the file has no data, just the units.
+                    return(data.table())
+                units = sapply(d[1,], as.character)
                 d = as.data.table(fread(fname, na.strings = "",
                     col.names = ifelse(is.na(units),
                         colnames(d),
                         sprintf("%s(%s)", colnames(d), units)),
-                    skip = 2))}}
+                    skip = 2, showProgress = F))}}
+        else if (!emas && endsWith(tolower(fname), ".xls"))
+          # `libxls` (`read_excel`) fails to read these.
+            return(data.table())
         else
-           {d = tryCatch(read_excel(fname),
+           {d = tryCatch(read_excel(fname, progress = F),
                 error = function(e)
                     list(fname = fname, em = conditionMessage(e)))
             if ("em" %in% names(d))
@@ -424,15 +429,12 @@ read.es = function(emas = F)
               # Reread the file, adding the units to the column names
               # to be more like the other files.
                {units = sapply(d[1,], as.character)
-                d = as.data.table(read_excel(fname,
+                d = as.data.table(read_excel(fname, progress = F,
                     col_names = ifelse(is.na(units),
                         colnames(d),
                         sprintf("%s(%s)", colnames(d), units)),
                     range = cell_limits(c(3, 1), c(NA, length(colnames(d))))))}}
-        d})
-
-    names(ds) = sapply(fnames, basename)
-    ds}
+        d})}
 
 process.es.observations = function(ds, emas = F, n.jobs = NULL)
    {di = 0
@@ -445,35 +447,49 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
         if (!nrow(d))
             return(d)
 
-        if (fname %in% c(
+        if (basename(fname) %in% c(
                 "ESIME Aguascalientes 2006.xlsx",
                   # This file has repeated DateTimes with
                   # distinct temperatures.
-                "ESIME Tepehuanes 2017.xlsx"))
+                "ESIME Tepehuanes 2017.xlsx",
                   # This file only has measurements from earlier
                   # years, which don't match what's in the
                   # earlier years' files.
+                "Tlaxcala 19.csv",
+                  # This is a file for a whole year in a directory
+                  # that has per-month files for the same station and
+                  # year.
+                "Zacatecas  jun 19.csv"))
+                  # There are two files for this station-month, so
+                  # exclude one.
             return(data.table())
+
+        d = copy(d)
+
+        # Remove columns with corrupted names.
+        for (col in which(!validUTF8(colnames(d))))
+            d[[col]] = NULL
 
         if (!emas)
           # For ESIMEs, skip any file that appears to contains more
           # than one station, because we rely on the file name to
           # determine the station name.
-           {stn.col = str_subset(colnames(d), "^(Estaci.+?n|Station)$")
+           {stn.col = colnames(d)[str_detect(tolower(colnames(d)),
+                "^(id)?(estaci.+?n|station)(name)?$")]
             stopifnot(length(stn.col) == 1)
             if (length(unique(d[[stn.col]])) > 1)
                 return(data.table())}
 
         if (emas &&
-                !is.subset(c("fecha", "TempAire", "RapViento", "HumRelativa", "PresBarometric", "Precipitacion", "nombre_estacion"), colnames(d)) &&
+                 !is.subset(c("fecha", "TempAire", "RapViento", "HumRelativa", "PresBarometric", "Precipitacion", "nombre_estacion"), colnames(d)) &&
                 !is.subset(c("Date", "Time", "AvgTemp(C)", "AvgBP(mbar)", "AvgRh(%)", "WSK(kph)", "WSMK(kph)", "Rain(mm)"), colnames(d)))
          # XTRA: other EMAs formats aren't considered.
             return(data.table())
 
-        d = copy(d)
-
         # Set the DateTime column.
-        rename.cols(d, c("Fecha-Tiempo", "fecha"), "DateTime")
+        rename.cols(d,
+            c("Fecha-Tiempo", "fecha", "tiempo", "DateTime(DateTime)"),
+            "DateTime")
         if ("Date" %in% colnames(d) & "Time" %in% colnames(d))
            {dparts = str_match(tolower(d$Date), "(\\d{4}) ([a-z]{3}) (\\d\\d?)")
             d[, DateTime := as.POSIXct(
@@ -494,11 +510,14 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
         rename.cols(d, "nombre_estacion", "stn")
         if (emas)
            {if (!("stn" %in% colnames(d)))
-                d[, stn := str_replace(tolower(fname),
+                d[, stn := str_replace(tolower(basename(fname)),
                    " +((emz|mrab|mzab|abjn|myjn|jlag) *)?([a-z][a-z]? *)?[0-9][0-9][an]? *\\.csv",
                    "")]}
+        else if (basename(dirname(fname)) == "ESIMEs_2018")
+            d[, stn := str_match(basename(fname), "ESIME (.+) \\d{4} *\\.")[,2]]
         else
-            d[, stn := str_match(fname, "ESIME (.+) \\d{4} *\\.")[,2]]
+            d[, stn := str_match(basename(fname),
+                "(.+?)\\s+[a-z]+\\s+\\d+\\s*\\.(xls|csv|CSV)$")[,2]]
 
         # Skip an EMAs station with many repeated datetimes.
         if (d$stn[1] == "acapo")
@@ -533,22 +552,22 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                    {stopifnot(attr(DateTime, "tz") == "UTC")
                     DateTime}},
             temp.C = ifcol(
-                "ATC(C)", "TempAire", "AvgTemp(C)"),
+                "ATC(C)", "ATC", "TempAire", "AvgTemp(C)"),
             relative.humidity.percent = ifcol(
-                "RH %", "Rh(%)", "HumRelativa", "AvgRh(%)"),
+                "RH %", "Rh(%)", "HumRelativa", "AvgRh(%)", "RH"),
             precipitation.mm = ifcol(
-                "Rain(mm) 10Min", "Rain(mm)", "Precipitacion"),
+                "Rain(mm) 10Min", "Rain(mm)", "Rain10m", "Rain", "Precipitacion"),
               # XTRA: some other ESIMEs column names that are infrequent:
-              # "Rain(mm) 1Hr", "Rain(mm) 24hrs", "Rain(mm) 3Hrs", "Rain(mm) 6Hrs"
-              # The unit for "Precipitacion" is a guess based on other
-              # EMAs files.
-            wind.speed.mps = ifcol("WS(m/s)"),
+              #   "Rain(mm) 1Hr", "Rain(mm) 24hrs", "Rain(mm) 3Hrs", "Rain(mm) 6Hrs"
+              # The units for "Rain10", "Rain", and "Precipitacion"
+              # are a guess based on other files.
+            wind.speed.mps = ifcol("WS(m/s)", "WS"),
             wind.speed.kmph = ifcol("WSK(kph)", "RapViento"),
               # The unit for RapViento is a guess based on the units
               # for other EMAs files.
               # XTRA: there are also some files with wind speed *u* vs.
               # wind speed *v* ("AvgWSU(m/s)", "AvgWSV(m/s)").
-            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PresBarometric"))]
+            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PB", "PresBarometric"))]
 
         # Keep only observations at the 10-minute intervals. I
         # see other observations in only a few cases, and they're
