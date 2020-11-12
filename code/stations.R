@@ -73,9 +73,9 @@ mlr = function(...)
 
 if.enough.halfhourly = function(f, vals)
    {if (sum(!is.na(vals)) >= (24*2) * proportion.of.day.required)
-       f(vals, na.rm = T)
+        f(vals, na.rm = T)
     else
-       NA_real_}
+        NA_real_}
 
 daily.summary = function(d, freq, variable.name)
    {d = d[!is.na(value)]
@@ -329,14 +329,17 @@ pm(get.ground.raw.smn.observatories <- function()
         ifelse(NOMBRE == "PRESION DE LA ESTACION HPa", "pressure.hPa",
                                                        "other")))))])]
 
+    # Remove some partly duplicated inconsistent
+    # observations.
+    whole = whole[!(stn == 9048 & year(date) == 2018 & month(date) == 5)]
+
     # Collect each variable.
     obs = combine.dailies(lapply(
         setdiff(unique(whole$variable), "other"),
         function(vname)
            {d = melt(
-                whole[variable == vname,
-                    mget(c("stn", "date",
-                        grep("VALUE", colnames(whole), val = T)))],
+                whole[variable == vname, mget(c("stn", "date",
+                    grep("VALUE", colnames(whole), val = T)))],
                 id.vars = c("date", "stn"),
                 variable.name = "time",
                 value.name = "value")
