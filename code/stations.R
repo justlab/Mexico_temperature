@@ -350,7 +350,7 @@ pm(get.ground.raw.smn.observatories <- function()
         stn = as.integer(CLAVE),
         lon = -(LONG + LONM/60 + ifelse(is.na(LONS), 0, LONS/(60*60))),
         lat = LATG + LATM/60 + ifelse(is.na(LATS), 0, LATS/(60*60)))]
-    
+
     punl(stations, obs)})
 
 get.ground.raw.smn.observatories.new <- function()
