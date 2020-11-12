@@ -55,7 +55,7 @@ To perform cross-validation and generate predictions, source ``modeling.R``. You
 Notes
 ============================================================
 
-Since R's ``readxl`` package has difficulty with the EMAs Excel files, I used LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 --max-procs 10 soffice --headless --convert-to csv --outdir ../stations/smn-emas-csv )``. This took about 1 hour 45 min on one of our servers.
+Since R's ``readxl`` package has difficulty with the EMAs Excel files, I used LibreOffice to mass-convert them to CSV with the following command: ``time ( ls | xargs --delimiter '\n' --max-args 250 soffice --headless --convert-to csv --outdir ../../smn-emas-csv/2018 )`` (and likewise ``smn-emas-csv/2019``). This can take a while.
 
 License
 ============================================================

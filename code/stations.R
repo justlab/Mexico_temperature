@@ -113,9 +113,6 @@ rename.cols = function(d, originals, target)
     if (length(matches))
        setnames(d, matches, target)}
 
-is.subset = function(needles, haystack)
-    !length(setdiff(needles, haystack))
-
 ## ------------------------------------------------------------
 ## * Per-network functions
 ## ------------------------------------------------------------
@@ -379,14 +376,14 @@ pm(get.ground.raw.smn.esimes <- function()
 
 pm(get.ground.raw.smn.emas <- function()
     es.stations(emas = T,
-        process.es.observations(emas = T, n.jobs = 8, read.es(emas = T))))
+        process.es.observations(emas = T, read.es(emas = T))))
 
 read.es = function(emas = F)
    {message("Loading SMN ", (if (emas) "EMAs" else "ESIMEs"))
 
     lf = function(...) list.files(full.names = T, ...)
     if (emas)
-        fnames = lf(stpath("smn-emas-csv"))
+        fnames = lf(stpath("smn-emas-csv", c("2018", "2019")))
     else
        {fnames = lf(stpath("smn-raw", "ESIMEs_2018"))
         fnames = grep(".xls", fnames, val = T)
@@ -436,11 +433,10 @@ read.es = function(emas = F)
                     range = cell_limits(c(3, 1), c(NA, length(colnames(d))))))}}
         d})}
 
-process.es.observations = function(ds, emas = F, n.jobs = NULL)
+process.es.observations = function(ds, emas = F)
    {di = 0
-    d = rbindlist(fill = T, Filter(nrow, pblapply(ds, cl = n.jobs, function(d)
+    d = rbindlist(fill = T, Filter(nrow, pblapply(ds, function(d)
        {di <<- di + 1
-        #message(di)
         fname = names(ds)[di]
 
         # Skip empty files.
@@ -459,8 +455,9 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                   # This is a file for a whole year in a directory
                   # that has per-month files for the same station and
                   # year.
-                "Zacatecas  jun 19.csv"))
-                  # There are two files for this station-month, so
+                "Zacatecas  jun 19.csv", "moli d19.csv",
+                    "mex4 f19.csv", "mex4 ab19.csv", "mex4 s19.csv"))
+                  # There are two files for these station-months, so
                   # exclude one.
             return(data.table())
 
@@ -481,8 +478,9 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                 return(data.table())}
 
         if (emas &&
-                 !is.subset(c("fecha", "TempAire", "RapViento", "HumRelativa", "PresBarometric", "Precipitacion", "nombre_estacion"), colnames(d)) &&
-                !is.subset(c("Date", "Time", "AvgTemp(C)", "AvgBP(mbar)", "AvgRh(%)", "WSK(kph)", "WSMK(kph)", "Rain(mm)"), colnames(d)))
+                !all(c("fecha", "TempAire", "RapViento", "HumRelativa", "PresBarometric", "Precipitacion", "nombre_estacion") %in% colnames(d)) &&
+                !all(c("Date", "Time", "AvgTemp(C)", "AvgBP(mbar)", "AvgRh(%)", "WSK(kph)", "Rain(mm)") %in% colnames(d)) &&
+                !all(c("Date", "Time", "AvgTemp", "AvgBP", "AvgRh", "WSK", "Rain") %in% colnames(d)))
          # XTRA: other EMAs formats aren't considered.
             return(data.table())
 
@@ -552,9 +550,9 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
                    {stopifnot(attr(DateTime, "tz") == "UTC")
                     DateTime}},
             temp.C = ifcol(
-                "ATC(C)", "ATC", "TempAire", "AvgTemp(C)"),
+                "ATC(C)", "ATC", "TempAire", "AvgTemp(C)", "AvgTemp"),
             relative.humidity.percent = ifcol(
-                "RH %", "Rh(%)", "HumRelativa", "AvgRh(%)", "RH"),
+                "RH %", "Rh(%)", "HumRelativa", "AvgRh(%)", "AvgRh", "RH"),
             precipitation.mm = ifcol(
                 "Rain(mm) 10Min", "Rain(mm)", "Rain10m", "Rain", "Precipitacion"),
               # XTRA: some other ESIMEs column names that are infrequent:
@@ -562,12 +560,12 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
               # The units for "Rain10", "Rain", and "Precipitacion"
               # are a guess based on other files.
             wind.speed.mps = ifcol("WS(m/s)", "WS"),
-            wind.speed.kmph = ifcol("WSK(kph)", "RapViento"),
+            wind.speed.kmph = ifcol("WSK(kph)", "RapViento",  "WSK"),
               # The unit for RapViento is a guess based on the units
               # for other EMAs files.
               # XTRA: there are also some files with wind speed *u* vs.
               # wind speed *v* ("AvgWSU(m/s)", "AvgWSV(m/s)").
-            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "PB", "PresBarometric"))]
+            pressure.hPa = ifcol("BP(mbar)", "AvgBP(mbar)", "AvgBP", "PB", "PresBarometric"))]
 
         # Keep only observations at the 10-minute intervals. I
         # see other observations in only a few cases, and they're
@@ -576,18 +574,25 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
         d[minute(datetime) %% 10 == 0 & second(datetime) == 0]})))
 
     message("Intermediate processing")
-    d = unique(d)
     # Drop rows that are missing on all the data columns.
     vnames = setdiff(colnames(d), c("date", "datetime", "stn"))
     d = d[rowSums(!is.na(d[, mget(vnames)])) > 0]
-    # Drop a single pesky partly duplicated observation.
-    d = d[!(stn == "la rumor" &
-       datetime == as.POSIXct(tz = "UTC", "2006-07-21 22:00:00") &
-       is.na(relative.humidity.percent))]
-    # We should now have only one observation per station and time.
-    stopifnot(all(d[, .N, by = .(stn, datetime)]$N == 1))
+    # Drop complete duplicates.
+    d = unique(d)
+    # Drop two pesky partly duplicated observations.
+    d = d[
+        !(stn == "la rumor" &
+            datetime == as.POSIXct(tz = "UTC", "2006-07-21 22:00:00") &
+            is.na(relative.humidity.percent)) &
+        !(stn == "encb1" &
+            datetime == as.POSIXct(tz = "UTC", "2003-02-28 19:00:00") &
+            temp.C == 2)]
     # Add dates.
     d[, date := as.Date(datetime, tz = target.tz)]
+    # Apply a date threshold early to help pass the below assertion.
+    d = d[date >= earliest.date]
+    # We should now have only one observation per station and time.
+    stopifnot(all(d[, .N, by = .(stn, datetime)]$N == 1))
 
     message("Summarizing")
     combine.dailies(lapply(
@@ -603,6 +608,7 @@ process.es.observations = function(ds, emas = F, n.jobs = NULL)
 es.stations = function(obs, emas = F)
    {stations = as.data.table(download(
         "http://web.archive.org/web/20180809001831id_/http://smn1.conagua.gob.mx/emas/catalogoa.html",
+          # XTRA: you could try switching to a newer file: https://web.archive.org/web/20201112153304id_/https://smn.conagua.gob.mx/tools/DATA/Observando%20el%20Tiempo/EMAS/EMAS.txt
         "smn_es_stations.html",
         function(fname)
             readHTMLTable(fname,
@@ -670,7 +676,9 @@ es.stations = function(obs, emas = F)
              "\\bjuani\\S*" = "juanico",
              "\\btantak\\b" = "tantaquin",
              "\\btlapa\\b.*" = "tlapa de comonfort",
-             "\\bpantanos de centla\\b" = "centla")
+             "\\bteziu\\b" = "tezuitlan",
+             "\\bpantanos de centla\\b" = "centla",
+             "\\bmuzq\\b" = "muzquiz")
          for (r in names(replacements))
              l[[x]] = str_replace_all(l[[x]], r, replacements[[r]])
 
@@ -694,8 +702,9 @@ es.stations = function(obs, emas = F)
     # exactly one good match.
     no.matches = c(
         "^cca$", "^leon$", "\\bvallarta\\b", "iztacihuatl",
-        "^matat$", "\\bloma\\b", "^montemorelos$",
-        "^tampico madero$", "^queretaro conagua$", "^merida conagua$")
+        "^matat\\b", "\\bloma\\b", "^montemorelos$",
+        "^tampico madero$", "^queretaro conagua$", "^merida conagua$",
+        "^molino del rey\\b", "^imta$", "^s?juan$")
     for (x in no.matches)
         match.i[str_detect(l$seen, x)] = NA
 
@@ -805,7 +814,7 @@ get.ground.raw = function()
 
     stopifnot(!anyNA(obs$date))
     stopifnot(!anyNA(obs$stn))
-    stopifnot(is.subset(unique(obs$stn), stations$stn))
+    stopifnot(all(unique(obs$stn) %in% stations$stn))
     stopifnot(nrow(unique(obs[, .(stn, date)])) == nrow(obs))
 
     # Convert units.
