@@ -296,11 +296,19 @@ pm(get.ground.raw.smn.observatories <- function()
   # available.
    {message("Loading SMN observatories")
 
+    dl = function(fname, f)
+        download(
+            paste0("ftp://200.4.8.36:/BD-Climatologica/Observatorios/",
+               fname),
+            file.path("smn-observatories", fname),
+            user = "ftpsmn.conagua",
+            password = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_SMN_FTP_PASSWORD"),
+            f = identity)
+
     na.value = -99999
 
     # Read in the giant CSV of hourly observations.
-    whole = fread(cmd = paste("unzip -p", shQuote(stpath(
-        "smn-raw", "OBS_2018", "Observatorios_Horarios.zip"))))
+    whole = fread(cmd = paste("unzip -p", shQuote(dl("OBS_HLY.zip"))))
     setnames(whole, colnames(whole),
         gsub("-", "_", colnames(whole), fixed = T))
     setnames(whole,
@@ -315,9 +323,8 @@ pm(get.ground.raw.smn.observatories <- function()
     # Read the file of variable codes and clean up the resulting
     # variable names.
     variable.codes = fread(paste(collapse = "\n", sub("\t\t", "\t", local(
-       {o = file(encoding = "Windows-1252", stpath(
-            "smn-raw", "OBS_2018",
-            "ELEMENTOS_HORARIOS_OBSERVATORIOS.txt"))
+       {o = file(encoding = "Windows-1252",
+            dl("ELEMENTOS_HORARIOS_OBSERVATORIOS.txt"))
         x = readLines(o, warn = F)
         close(o)
         x}))))
@@ -347,30 +354,14 @@ pm(get.ground.raw.smn.observatories <- function()
             daily.summary(d, "hour", vname)}))
 
     # Collect stations.
-    stations = as.data.table(read_excel(stpath(
-        "smn-raw", "OBS_2018", "Claves_Observatorios.xlsx")))
+    stations = as.data.table(read_excel(
+        dl("Claves_Observatorios.xlsx")))
     stations = stations[!is.na(CLAVE), .(
         stn = as.integer(CLAVE),
         lon = -(LONG + LONM/60 + ifelse(is.na(LONS), 0, LONS/(60*60))),
         lat = LATG + LATM/60 + ifelse(is.na(LATS), 0, LATS/(60*60)))]
 
     punl(stations, obs)})
-
-get.ground.raw.smn.observatories.new <- function()
-  # Incomplete code to collect newer versions of the SMN observatories
-  # files from an FTP site.
-   {dl = function(fname, f, ...)
-        download(
-            paste0("ftp://200.4.8.36:/BD-Climatologica/Observatorios/",
-               fname),
-            file.path("smn-observatories", fname),
-            user = "ftpsmn.conagua",
-            password = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_SMN_FTP_PASSWORD"),
-            f = f, ...)
-
-    dl("ELEMENTOS_HORARIOS_OBSERVATORIOS.txt", message)
-    dl("Claves_Observatorios.xlsx", message)
-    dl("OBS_HLY.zip", message)}
 
 ## *** ESIMEs and EMAs
 
