@@ -714,6 +714,20 @@ es.stations = function(obs, emas = F)
     obs = obs[!is.na(obs.matches)]
     obs[, stn := stations[na.omit(obs.matches), stn]]
 
+    obs = obs[
+        # I haven't been able to distinguish the two Escuela Nacional
+        # de Ciencias stations in two early years, leading to
+        # duplicate observations, so drop them all.
+        !(emas &
+            str_detect(tolower(stn),
+                fixed("escuela nacional de ciencias")) &
+            year(date) %in% c(2008, 2009)) &
+        # There seem to be some dupes for the station "MONTERREY" in
+        # ESIMEs.
+        !(!emas &
+            str_detect(tolower(stn), fixed("monterrey")) &
+            "2019-01-01" <= date & date <= "2019-02-04")]
+
     punl(stations, obs)}
 
 ## ** Wunderground
