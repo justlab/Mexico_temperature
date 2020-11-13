@@ -303,6 +303,9 @@ pm(get.ground.raw.smn.observatories <- function()
             file.path("smn-observatories", fname),
             user = "ftpsmn.conagua",
             password = Sys.getenv("JUSTLAB_MEXICO_TEMPERATURE_SMN_FTP_PASSWORD"),
+              # We probably aren't entitled to publish the password,
+              # so admittedly, this download code isn't usable outside
+              # the Just lab.
             f = identity)
 
     na.value = -99999
