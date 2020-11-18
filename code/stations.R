@@ -853,12 +853,12 @@ get.ground.raw = function()
 
     punl(stations, obs)}
 
-min.obs = 100
+min.obs = 20
 possible.duplicate.dist.meters = 2000
 min.common.days = 30
 max.proportion.equal = 1/10
 
-deviance.quantile = .95
+deviance.quantile = .99
 idw.maxdist.meters = 30e3
 idw.elev.thresh.meters = 500
 
@@ -881,8 +881,10 @@ filter.raw = function(stations, obs)
     obs = obs[stn %in% stations$stn]
     status()
 
-    message("Removing stations with only a few observations")
-    obs = obs[, by = stn, if (.N >= min.obs) .SD]
+    message("Removing station-years with only a few observations")
+    obs = obs[, by = .(stn, year(date)),
+        .SDcols = setdiff(colnames(obs), "stn"),
+        if (.N >= min.obs) .SD]
     stations = stations[stn %in% unique(obs$stn)]
     status()
 
@@ -916,7 +918,9 @@ filter.raw = function(stations, obs)
         precs = obs[, keyby = stn, .(prec =
            {C = na.omit(unique(c(temp.C.max, temp.C.min)))
             f = conv_unit(C, "C", "F")
-            if (close.to(C, round(C)))
+            if (!length(C))
+                NA_character_
+            else if (close.to(C, round(C)))
                 "1 C"
             else if (close.to(f, round(f)))
                 "1 F"
@@ -974,6 +978,22 @@ filter.raw = function(stations, obs)
                 [, mean(V1)])
             stopifnot(proportion.equal < max.proportion.equal)}}
 
+    message("Dropping long runs of repeated temperatures")
+    setkey(obs, stn, date)
+    drop.reps = function(vname, max.repeat.len)
+        obs <<- obs[!obs
+            [!is.na(get(vname))]
+            [, by = .(stn, rleid(round(get(vname) * 100))),
+                if (.N > max.repeat.len) .(date)]
+            [, .(stn, date)]]
+    # Runs longer than 2 (for the mean) or 3 (for the min or max) are
+    # rare, with most of the really long runs being in Wunderground.
+    # So, use 2 and 3 as the maximum allowed run lengths.
+    drop.reps("temp.C.mean", 2)
+    drop.reps("temp.C.min", 3)
+    drop.reps("temp.C.max", 3)
+    status()
+
     message("Getting station elevations")
     stations[, elev := extract(get.elevation(),
         st_as_sf(.SD, coords = c("lon", "lat"), crs = crs.lonlat))]
@@ -983,8 +1003,7 @@ filter.raw = function(stations, obs)
     message("Removing deviant stations (by temperature)")
     # Compute the squared differences between observed temperatures
     # and IDW interpolations from other stations. Throw away the
-    # stations with the greatest such differences.
-    stns.deviant = character()
+    # observations with the greatest such differences.
     local(
        {idw.tables = repeated.idw.tables(
             locations = st_coordinates(st_transform(crs = crs.mexico.city,
@@ -997,23 +1016,29 @@ filter.raw = function(stations, obs)
                 # Only use stations within an elevation threshold.
                 abs(stations[i, elev] - stations$elev)
                     < idw.elev.thresh.meters)
+        obs[, n.had := 0]
+        obs[, n.removed := 0]
         for (temp.var in paste0("temp.C.", c("max", "min", "mean")))
-           {obs[, idw := repeated.idw(
+           {deviance = obs[, abs(get(temp.var) - repeated.idw(
                 tables = idw.tables,
                 li = match(stn, stations$stn),
                 group = date,
                 outcome = get(temp.var),
-                progress = T)]
-            diffs = obs[!is.na(get(temp.var)) & !is.na(idw), by = stn,
-               {sqd = (get(temp.var) - idw)^2
-                .(sqd.mean = mean(sqd), sqd.max = max(sqd))}]
-            stns.deviant <<- unique(c(stns.deviant,
-                diffs[j = stn,
-                    sqd.mean > quantile(sqd.mean, deviance.quantile) |
-                    sqd.max > quantile(sqd.max, deviance.quantile)]))}})
-    obs[, idw := NULL]
-    stations = stations[!(stn %in% stns.deviant)]
-    obs = obs[!(stn %in% stns.deviant)]
+                progress = T))]
+            obs[, n.had := n.had + !is.na(get(temp.var))]
+            use = (!is.na(deviance) &
+                stations$network[match(obs$stn, stations$stn)]
+                    != "wunderground")
+              # We want to omit Wunderground from computation
+              # of the deviance quantiles.
+            discard = !is.na(deviance) &
+                deviance > quantile(deviance[use], deviance.quantile)
+            obs[, n.removed := n.removed + discard]
+            obs[discard, (temp.var) := NA]}})
+    message("Proportions of temperature-days removed:")
+    print(obs[,
+       by = .(network = stations$network[match(obs$stn, stations$stn)]),
+       round(d = 3, sum(n.removed) / sum(n.had))])
     status()
 
     # Replace station identifiers with simple integers, and put
