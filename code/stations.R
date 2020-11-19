@@ -1041,6 +1041,10 @@ filter.raw = function(stations, obs)
        round(d = 3, sum(n.removed) / sum(n.had))])
     status()
 
+    message("Blanking partly observed daily temperatures")
+    obs[is.na(temp.C.max) | is.na(temp.C.mean) | is.na(temp.C.min),
+        paste0("temp.C.", c("max", "mean", "min")) := NA]
+
     # Replace station identifiers with simple integers, and put
     # stations and observations in a logical order.
     stations[, name := stn]
