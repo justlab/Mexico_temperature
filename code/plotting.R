@@ -46,66 +46,6 @@ temp.quantiles.map = function(the.year)
            legend.position = "bottom", legend.key.width = unit(20, "mm")) +
         coord_equal()}
 
-change.map = function(years1, years2)
-   {d = local(
-      {f = function(ys)
-           rbindlist(lapply(ys, function(y) predict.temps(y, "pred.area")))[,
-               keyby = mrow, .(temp = mean(pred.ground.temp.mean))]
-       p1 = f(years1)
-       p2 = f(years2)
-       cbind(
-           change = p2$temp - p1$temp,
-           master.grid[p1$mrow, .(x_sinu, y_sinu)])})
-    message("Range: ", round(min(d$change), 2), " to ", round(max(d$change), 2))
-    ggplot(d) +
-        geom_raster(aes(x_sinu, y_sinu, fill = change)) +
-        scale_fill_gradient2(
-            low = scales::muted("blue"),
-            mid = "#ffffcc",
-            high = scales::muted("red"),
-            limits = c(-2.7, 1.6),
-            breaks = c(-2.7, -2, -1, 0, 1, 1.6),
-            guide = guide_colorbar(nbin = 500)) +
-        theme_void() +
-        coord_equal()}
-
-area.map = function(years = NULL)
-   {xr = range(master.grid$x_sinu)
-    yr = range(master.grid$y_sinu)
-    xd = 5000
-    yd = 5000
-    ggplot() +
-        geom_raster(aes(x_sinu, y_sinu), fill = "gray95",
-            data = master.grid) +
-        geom_sf(data = pred.area(),
-            fill = "white", color = "black", size = .2) +
-        geom_point(aes(x_sinu, y_sinu), color = "red",
-            size = .1,
-            data = master.grid[unique(stations[
-                (if (is.null(years)) T else (stn %in%
-                    ground[year(date) %in% years, unique(stn)])),
-                mrow])]) +
-        coord_sf(crs = crs.satellite, expand = F,
-            xlim = c(xr[1] - xd, xr[2] + xd),
-            ylim = c(yr[1] - yd, yr[2] + yd)) +
-        scale_x_continuous(name = "",
-            breaks = -100 : -98) +
-        scale_y_continuous(name = "",
-            breaks = c(18.5, 19, 19.5, 20, 20.5)) +
-        theme_bw() +
-        theme(
-            panel.grid.major = element_line(color = "transparent"))}
-
-mexico.context.map = function()
-    ggmap::ggmap(get_stamenmap(zoom = 5,
-            c(left = -123, right = -86, bottom = 10, top = 34),
-            maptype = "terrain")) +
-        with(study.area(), annotate("rect",
-            xmin = left, xmax = right,
-            ymin = bottom, ymax = top,
-            color = "red", fill = NA)) +
-        theme_void()
-
 pop.map = function(pop.col, thresholds.tempC = NULL)
    {d = merge(by = "mrow", master.grid, per.mrow.population(pop.col))
     if (!is.null(thresholds.tempC))
