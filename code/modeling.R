@@ -450,7 +450,7 @@ learning.curve <- function(the.year = 2018L, dvname)
     rmse.overall = cv.result[, rmse(ground.temp, pred)]
     foldsets = combn(unique(cv.result$fold), n.folds.for.holdout, simplify = F)
     folds.holdout = foldsets[[which.min(abs(rmse.overall -
-        sapply(foldsets, function(folds) 
+        sapply(foldsets, function(folds)
             cv.result[fold %in% folds, rmse(ground.temp, pred)])))]]
 
     # Prepare the data.
