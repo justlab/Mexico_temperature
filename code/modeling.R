@@ -366,7 +366,7 @@ summarize.cv.results = function(multirun.output, test.wunder = T)
     f.r2 = function(pred, obs)
         1 - mean((obs - pred)^2)/var(obs)
     j1 = quote(.(.N, stn = length(unique(stn)),
-        sd = sd(ground.temp), rmse = sqrt(mean((ground.temp - pred)^2)),
+        sd = sd(ground.temp), rmse = rmse(ground.temp, pred),
         R2 = f.r2(pred, ground.temp)))
     d[, c("lon", "lat") := stations[d$stn, .(lon, lat)]]
     d[, region := master.grid[stations[d$stn, mrow], region]]
@@ -482,8 +482,8 @@ learning.curve <- function(the.year = 2018L, dvname)
                 train.wunder = T)
             f.pred = train.model(d[(!holdout)])
             setTxtProgressBar(bar, n.reps * (round.i - 1) + rep.i)
-            data.table(rmse = d[(holdout), sqrt(mean(
-                (ground.temp - f.pred(.SD))^2))])}))))))
+            data.table(rmse = d[(holdout),
+                rmse(ground.temp, f.pred(.SD))])}))))))
      close(bar)
 
      result[, n.obs := obs.counts[round.i]]
