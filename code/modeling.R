@@ -551,7 +551,7 @@ predict.temps = function(the.year, mrow.set)
         h5attr(h5[["data"]], "dimensions"),
         function(k) h5[["dimension_labels"]][[k]][])
     h5$close_all()
-    d = dcast(as.data.table(melt(d)),
+    d = dcast(as.data.table(reshape2::melt(d)),
         mrow + date ~ variable)
     d[, date := yday(as.Date(date))]
     setnames(d, "date", "yday")
