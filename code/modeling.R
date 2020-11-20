@@ -511,7 +511,8 @@ predict.temps = function(the.year, mrow.set)
         d[, ground.temp := NA_real_]
 
         message("Imputing non-temperature ground variables")
-        d = impute.nontemp.ground.vars(d, fold.i = NULL, progress = T)
+        d = impute.nontemp.ground.vars(d,
+            folds.holdout = integer(), progress = T)
 
         for (dvname in temp.ground.vars)
            {message("Training for ", dvname)
