@@ -460,9 +460,10 @@ learning.curve <- function(the.year = 2018L, dvname)
     d.master[, holdout := fold %in% folds.holdout]
 
     message("Running simulations")
-    stn.counts = c(10 * (1:8),
-        d.master[(!holdout), length(unique(stn))])
-    obs.counts = 2500 * (1:9)
+    stn.counts = 10 * (1:7)
+    stopifnot(max(stn.counts) <= d.master[(!holdout), length(unique(stn))])
+    obs.counts = 2500 * (1:7)
+    stopifnot(max(obs.counts) <= d.master[(!holdout), .N])
     n.reps = 100L
     set.seed(15L)
     bar = txtProgressBar(min = 0, max = length(obs.counts) * n.reps, style = 3)
