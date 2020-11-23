@@ -162,3 +162,23 @@ pred.error.plot = function()
            axis.title.y = element_blank(),
            axis.text.y = element_blank(),
            axis.ticks.y = element_blank())}
+
+learning.curve.plot = function()
+   {d = learning.curve(dvname = "ground.temp.mean")
+    ggsave("learning-curve.png", width = 4, height = 4, dpi = 120,
+        ggplot(d) +
+        geom_point(aes(n.stns, rmse), shape = "-", size = 3) +
+        stat_summary(geom = "point", aes(n.stns, rmse),
+            fun = mean, color = "red", shape = "—", size = 5) +
+        scale_y_continuous(
+            name = "RMSE (K)",
+            expand = c(0, 0),
+            breaks = seq(1.1, 2, by = .1),
+            limits = c(1.1, 2)) +
+        scale_x_continuous(
+            name = "Number of stations and observations in training",
+            breaks = unique(d$n.stns),
+            labels = paste(sep = "\n",
+                unique(d$n.stns), scales::comma(unique(d$n.obs)))) +
+        theme_bw() +
+        theme(panel.grid = element_blank()))}
