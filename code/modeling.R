@@ -459,6 +459,10 @@ learning.curve <- function(the.year = 2018L, dvname)
     d.master[, setdiff(temp.ground.vars, dvname) := NULL]
     d.master[, holdout := fold %in% folds.holdout]
 
+    message("Holdout folds:")
+    print(d.master[(holdout),
+        .(stns = length(unique(stations)), obs = .N)])
+
     message("Running simulations")
     stn.counts = 10 * (1:7)
     stopifnot(max(stn.counts) <= d.master[(!holdout), length(unique(stn))])
