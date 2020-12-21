@@ -10,7 +10,8 @@ suppressPackageStartupMessages(
     library(caret)
     library(stringr)
     library(raster)
-    library(hdf5r)})
+    library(hdf5r)
+    library(fst)})
 
 source("common.R")
 
@@ -601,6 +602,34 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         paste0("model.", temp.ground.vars),
         "simat.ground.temp.mean",
         "precipitation.mm"))]}
+
+predict.temps.progress = function(from.path, to.path)
+   {d = fread(from.path)
+    stopifnot(all(c("folio", "lat", "lon", "since", "to") %in% names(d)))
+      # `folio` is the subject ID.
+
+    stopifnot(!anyNA(d))
+    # Check that all positions are legal.
+    set.mrows(d, "lon", "lat")
+    stopifnot(all(master.grid[d$mrow, in.pred.area]))
+    # Check that there's only one row per `folio` and date.
+    stopifnot(d[, by = folio, if (.N > 1)
+         0 == anyDuplicated(unlist(lapply(1 : .N,
+             function(i) seq(since[i], to[i], by = 1))))][, all(V1)])
+    # Expand into one row per day.
+    d = rbindlist(lapply(1 : nrow(d), function(i)
+       d[i, .(folio, mrow, date = seq(since, to, by = 1))]))
+    # Discard dates we can't handle.
+    d = d[earliest.date <= date & year(date) <= latest.year]
+
+    d[, yday := yday(date)]
+    message("Getting model predictions")
+    d[, by = .(y = year(date)), paste0("model.", temp.ground.vars) :=
+        predict.temps(y, "pred.area")[
+            .(.SD$mrow, .SD$yday),
+            mget(paste0("pred.", temp.ground.vars))]]
+    write.fst(path = to.path, d[, mget(c(
+        "folio", "mrow", "date", paste0("model.", temp.ground.vars)))])}
 
 pm(mem = T, fst = T,
 per.mrow.population <- function(pop.col)
