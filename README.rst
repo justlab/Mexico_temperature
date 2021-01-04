@@ -10,7 +10,9 @@ Instructions
 Getting the temperature predictions
 ------------------------------------------------------------
 
-To examine or use our temperature predictions without running any of our code, take a look at the `HDF5 <http://portal.hdfgroup.org/display/HDF5/Introduction+to+HDF5>`_ files ``predictions_*.h5``. There's one file per year. Each file has a three-dimensional array ``data`` with an attribute ``dimensions`` naming the dimensions (location, time, and variable) and a group ``dimension_labels`` naming each index of each dimension. The temperatures are in degrees Celsius, and the dates indicate 24-hour spans of UTC-06:00. ``mrow`` values are row indices of the master grid, which can be found in ``master_grid.h5``. The original coordinates of the grid (in which it is, in fact, a regular grid) are ``x_sinu`` and ``y_sinu``, which are in the coordinate reference system ``crs.satellite``, defined in ``common.R`` as ``"+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"``, which is the `MODIS global sinusoidal projection <https://modis-land.gsfc.nasa.gov/MODLAND_grid.html>`_.
+N.B. The saved predictions are rounded, and saved as integer tenths of a degree Celcius; e.g., the temperature 34.56 °C would be stored as 346.
+
+To examine or use our temperature predictions without running any of our code, take a look at the `HDF5 <http://portal.hdfgroup.org/display/HDF5/Introduction+to+HDF5>`_ files ``predictions_*.h5``. There's one file per year. Each file has a three-dimensional array ``data`` with an attribute ``dimensions`` naming the dimensions (location, time, and variable) and a group ``dimension_labels`` naming each index of each dimension. The temperatures are in tenths of a degree Celsius, and the dates indicate 24-hour spans of UTC-06:00. ``mrow`` values are row indices of the master grid, which can be found in ``master_grid.h5``. The original coordinates of the grid (in which it is, in fact, a regular grid) are ``x_sinu`` and ``y_sinu``, which are in the coordinate reference system ``crs.satellite``, defined in ``common.R`` as ``"+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs"``, which is the `MODIS global sinusoidal projection <https://modis-land.gsfc.nasa.gov/MODLAND_grid.html>`_.
 
 Here's how you could plot the mean temperatures for 5 July 2012 in R
 
@@ -20,7 +22,7 @@ Here's how you could plot the mean temperatures for 5 July 2012 in R
     library(ggplot2)
 
     h5 = H5File$new("predictions_2012.h5", mode = "r")
-    preds = h5[["data"]][,,]
+    preds = h5[["data"]][,,] / 10
     dimnames(preds) = sapply(simplify = F,
         h5attr(h5[["data"]], "dimensions"),
         function(k) h5[["dimension_labels"]][[k]][])

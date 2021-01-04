@@ -498,6 +498,8 @@ learning.curve <- function(the.year = 2018L, dvname)
 
 if (!exists("predict.temps.cache")) predict.temps.cache = list()
 
+saved.preds.rounding = 10L
+
 predict.temps = function(the.year, mrow.set)
   # Predict a low, mean, and high temperature for every cell in
   # `mrow.set` and day in `the.year`.
@@ -525,7 +527,8 @@ predict.temps = function(the.year, mrow.set)
             d[, ground.temp := get(dvname)]
             f.pred = train.model(d[!is.na(ground.temp)])
             message("Predicting ", dvname)
-            d[, paste0("pred.", dvname) := f.pred(.SD)]}
+            d[, paste0("pred.", dvname) := as.integer(round(
+                saved.preds.rounding * f.pred(.SD)))]}
 
         d = d[mrow %in% mrow.sets[[mrow.set]],
             keyby = .(mrow, yday),
@@ -552,7 +555,7 @@ predict.temps = function(the.year, mrow.set)
 
     message("Reading HDF5")
     h5 = H5File$new(path, mode = "r")
-    d = h5[["data"]][,,]
+    d = h5[["data"]][,,] / saved.preds.rounding
     dimnames(d) = sapply(simplify = F,
         h5attr(h5[["data"]], "dimensions"),
         function(k) h5[["dimension_labels"]][[k]][])
