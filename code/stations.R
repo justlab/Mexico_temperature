@@ -871,16 +871,26 @@ extreme.precipitation.mm = 1634
 extreme.wind.speed.mps = 114
 
 filter.raw = function(stations, obs)
-   {status = function()
-       message(sprintf("Now at %s observations from %s stations",
+   {nrow.obs.was = 0
+    status = function()
+      {message(sprintf("Now at %s observations from %s stations%s",
            format(nrow(obs), big.mark = ","),
-           format(nrow(stations), big.mark = ",")))
+           format(nrow(stations), big.mark = ","),
+           (if (nrow.obs.was)
+               sprintf(" (%s obs. dropped)",
+                   format(nrow.obs.was - nrow(obs), big.mark = ",")) else
+               "")))
+       nrow.obs.was <<- nrow(obs)}
     status()
 
     message("Narrowing to study area")
     stations = stations[in.study.area(lon, lat)]
     obs = obs[stn %in% stations$stn]
     status()
+
+    setkey(stations, stn)
+    starting.obs.by.network =
+        obs[, keyby = .(network = stations[.(obs$stn), network]), .N]
 
     message("Removing station-years with only a few observations")
     obs = obs[, by = .(stn, year(date)),
@@ -998,10 +1008,9 @@ filter.raw = function(stations, obs)
     message("Getting station elevations")
     stations[, elev := extract(get.elevation(),
         st_as_sf(.SD, coords = c("lon", "lat"), crs = crs.lonlat))]
-    setkey(stations, stn)
     obs[, elev := stations[.(obs$stn), elev]]
 
-    message("Removing deviant observations (by temperature)")
+    message("Finding deviant observations (by temperature)")
     # Compute the squared differences between observed temperatures
     # and IDW interpolations from other stations. Throw away the
     # observations with the greatest such differences.
@@ -1036,7 +1045,6 @@ filter.raw = function(stations, obs)
                 deviance > quantile(deviance[use], deviance.quantile)
             obs[, n.removed := n.removed + discard]
             obs[discard, (temp.var) := NA]}})
-    status()
 
     message("Removing stations with high proportions of deviant obs.")
     bad.stations = obs[, by = stn, .(p = sum(n.removed) / sum(n.had))][
@@ -1052,6 +1060,10 @@ filter.raw = function(stations, obs)
     message("Blanking partly observed daily temperatures")
     obs[is.na(temp.C.max) | is.na(temp.C.mean) | is.na(temp.C.min),
         paste0("temp.C.", c("max", "mean", "min")) := NA]
+
+    message("Proportion removed by network:")
+    print(obs[, keyby = .(network = stations[.(obs$stn), network]),
+        1 - .N / starting.obs.by.network[.(.BY$network), N]])
 
     # Replace station identifiers with simple integers, and put
     # stations and observations in a logical order.
