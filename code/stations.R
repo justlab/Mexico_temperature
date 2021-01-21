@@ -861,6 +861,7 @@ max.proportion.equal = 1/10
 deviance.quantile = .99
 idw.maxdist.meters = 30e3
 idw.elev.thresh.meters = 500
+deviance.obs.prop.to.drop.station = .2
 
 # https://en.wikipedia.org/wiki/Climate_of_Mexico#Weather_records
 extreme.hi.temp.C = 53
@@ -1000,7 +1001,7 @@ filter.raw = function(stations, obs)
     setkey(stations, stn)
     obs[, elev := stations[.(obs$stn), elev]]
 
-    message("Removing deviant stations (by temperature)")
+    message("Removing deviant observations (by temperature)")
     # Compute the squared differences between observed temperatures
     # and IDW interpolations from other stations. Throw away the
     # observations with the greatest such differences.
@@ -1035,10 +1036,13 @@ filter.raw = function(stations, obs)
                 deviance > quantile(deviance[use], deviance.quantile)
             obs[, n.removed := n.removed + discard]
             obs[discard, (temp.var) := NA]}})
-    message("Proportions of temperature-days removed:")
-    print(obs[,
-       by = .(network = stations$network[match(obs$stn, stations$stn)]),
-       round(d = 3, sum(n.removed) / sum(n.had))])
+    status()
+
+    message("Removing stations with high proportions of deviant obs.")
+    bad.stations = obs[, by = stn, .(p = sum(n.removed) / sum(n.had))][
+        p >= deviance.obs.prop.to.drop.station, stn]
+    stations = stations[!(stn %in% bad.stations)]
+    obs = obs[!(stn %in% bad.stations)]
     status()
 
     message("Blanking partly observed daily temperatures")
