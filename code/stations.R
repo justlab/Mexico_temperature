@@ -1045,6 +1045,10 @@ filter.raw = function(stations, obs)
     obs = obs[!(stn %in% bad.stations)]
     status()
 
+    message("Removing deviant observations")
+    obs = obs[n.removed == 0]
+    status()
+
     message("Blanking partly observed daily temperatures")
     obs[is.na(temp.C.max) | is.na(temp.C.mean) | is.na(temp.C.min),
         paste0("temp.C.", c("max", "mean", "min")) := NA]
