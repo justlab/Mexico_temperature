@@ -33,8 +33,8 @@ temp.quantiles.map = function(the.year)
         scale_fill_distiller(
             name = "Temperature (°C)",
             palette = "Spectral",
-            limits = c(2, 38),
-            breaks = c(2, seq(5, 35, by = 5), 38),
+            limits = c(1, 37),
+            breaks = c(1, seq(5, 35, by = 5), 37),
             guide = guide_colorbar(nbin = 500)) +
         geom_vline(data = data.frame(kind = 1, x = max(d$x_sinu) + 1),
             aes(xintercept = x)) +
