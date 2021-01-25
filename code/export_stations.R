@@ -16,7 +16,7 @@ out_path = file.path(data.root, "stations_export.shp")
 st_write(staSF, out_path)
 to_zip = list.files(data.root, pattern = "stations_export", full.names = TRUE)
 zip(file.path(data.root, paste0("stations_shp_export_", format(Sys.Date(), "%m-%d-%Y"), ".zip")), 
-    files = to_zip)
+    files = to_zip, flags = "-j")
 
 # delete unzipped shapefile
 unlink(to_zip)
