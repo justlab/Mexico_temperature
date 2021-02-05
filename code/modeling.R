@@ -606,8 +606,8 @@ predict.temps.at = function(fname, date.col, lon.col, lat.col)
         "simat.ground.temp.mean",
         "precipitation.mm"))]}
 
-predict.temps.progress = function(from.path, to.path)
-   {d = fread(from.path)
+predict.temps.progress = function(from.paths, to.path)
+   {d = rbindlist(lapply(from.paths, fread))
     stopifnot(all(c("folio", "lat", "lon", "since", "to") %in% names(d)))
       # `folio` is the subject ID.
 
