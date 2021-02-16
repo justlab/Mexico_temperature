@@ -612,9 +612,18 @@ predict.temps.progress = function(from.paths, to.path)
       # `folio` is the subject ID.
 
     stopifnot(!anyNA(d))
-    # Check that all positions are legal.
+    # Check locations.
+    outside = d[, !in.study.area(lon, lat)]
+    if (any(outside))
+       {message(sprintf("Dropping %d rows outside study area",
+            sum(outside)))
+        d = d[!outside]}
     set.mrows(d, "lon", "lat")
-    stopifnot(all(master.grid[d$mrow, in.pred.area]))
+    outside = master.grid[d$mrow, !in.pred.area]
+    if (any(outside))
+       {message(sprintf("Dropping %d rows outside prediction area",
+            sum(outside)))
+        d = d[!outside]}
     # Check that there's only one row per `folio` and date.
     stopifnot(d[, by = folio, if (.N > 1)
          0 == anyDuplicated(unlist(lapply(1 : .N,
