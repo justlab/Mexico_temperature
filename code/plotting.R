@@ -124,9 +124,15 @@ time.series.plot = function()
     d[, type := factor(ifelse(type == "pred", "Predicted", "Observed"))]
     d[, stn := factor(names(stns)[match(stn, stns)])]
 
-    ggplot(d, aes(mday, temp, color = type, group = type)) +
+    ggplot(d, aes(mday, temp, color = type, fill = type, shape = type, group = type)) +
         geom_point() +
         geom_line() +
+        scale_color_manual(name = "", values =
+            c("#0000aa", "#aaaa00")) +
+        scale_fill_manual(name = "", values =
+            c("#0000aa", "#aaaa00")) +
+        scale_shape_manual(name = "", values =
+            c(21, 23)) +
         facet_grid(stn ~ year) +
         scale_x_continuous(name = "Day of June",
             breaks = c(1, 10, 20, 30)) +
@@ -134,7 +140,6 @@ time.series.plot = function()
             breaks = seq(15, 30, by = 5),
             limits = c(15, 30),
             expand = c(0, 0)) +
-        labs(color = "") +
         theme_bw() +
         theme(
            axis.text = element_text(color = "black"),
