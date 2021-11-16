@@ -1,4 +1,6 @@
-In this project, "A spatiotemporal reconstruction of daily ambient temperature using satellite data in the Megalopolis of Central Mexico from 2003–2019", we built a model to predict the mean, maximum, and minimum temperature on each day at each square in a 1-km grid for an area around Mexico City.
+In this project, we built a model to predict the mean, maximum, and minimum temperature on each day at each square in a 1-km grid for an area around Mexico City. The project is described in
+
+    Gutiérrez-Avila, I., Arfer, K. B., Wong, S., Rush, J., Kloog, I., & Just, A. C. (2021). A spatiotemporal reconstruction of daily ambient temperature using satellite data in the Megalopolis of Central Mexico from 2003–2019. *International Journal of Climatology, 41*, 4095–4111. `doi:10.1002/joc.7060`_
 
 Raw and processed data, including predictions, as well as a research notebook, can be found on Zenodo at http://doi.org/10.5281/zenodo.3362523
 
@@ -68,4 +70,5 @@ This program is free software: you can redistribute it and/or modify it under th
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the `GNU General Public License`_ for more details.
 
+.. _`doi:10.1002/joc.7060`: https://doi.org/10.1002/joc.7060
 .. _`GNU General Public License`: http://www.gnu.org/licenses/
